@@ -24,7 +24,7 @@ module.exports = {
     web: {
       favicon: './assets/favicon.png',
     },
-    plugins: ['expo-image', 'expo-font', 'expo-secure-store'],
+    plugins: ['expo-font', 'expo-secure-store'],
     extra: {
       storeApiUrl: process.env.EXPO_PUBLIC_STORE_API_URL || 'https://boticuy.com/wp-json/wc/store/v1',
       wpApiUrl: process.env.EXPO_PUBLIC_WP_API_URL || 'https://boticuy.com/wp-json/wp/v2',

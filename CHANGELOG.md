@@ -152,4 +152,30 @@ Refactorización técnica completa sobre la v1 original (app + backend), no un p
 
 ---
 
+## [2.0.1] - 2026-07-10 (rollback de SDK, esta sesión)
+
+**Rollback temporal de Expo SDK 57 → SDK 54.** Motivo: Apple tiene la versión de **Expo Go** publicada en la App Store de iOS **congelada en SDK 54 desde hace meses** (no ha aprobado versiones más nuevas que soporten SDK 55/56/57), y la prioridad de esta sesión era poder probar la app en un iPhone físico. Sin este rollback, Expo Go en un iPhone real no puede abrir un proyecto en SDK 57.
+
+### Changed
+- `expo` fijado a `~54.0.0` (antes `^57`); reinstalación completa (`node_modules` + `package-lock.json` borrados y reinstalados) para resolver correctamente todas las versiones hacia atrás — `expo install --fix` no bastó por sí solo porque comparaba contra lo ya instalado, no contra el rango recién editado.
+- Todo el árbol de dependencias realineado a SDK 54: `react 19.1.0`, `react-dom 19.1.0`, `react-native 0.81.5`, `expo-constants ~18.0.13`, `expo-font ~14.0.12`, `expo-image ~3.0.11`, `expo-secure-store ~15.0.8`, `expo-status-bar ~3.0.9`, `react-native-gesture-handler ~2.28.0`, `react-native-safe-area-context ~5.6.0`, `react-native-screens ~4.16.0`, `react-native-webview 13.15.0`, `@react-native-community/netinfo 11.4.1`, `jest-expo ~54.0.17`, `react-test-renderer 19.1.0`, `typescript ~5.9.2`, `@types/react ~19.1.10`. `@react-native-async-storage/async-storage` (2.2.0) y `posthog-react-native` (^4.55.0) no cambiaron — ya eran compatibles con ambos SDKs.
+- `app.config.js` → `plugins`: se quitó `'expo-image'` de la lista (quedó `['expo-font', 'expo-secure-store']`). Causa: un choque entre Node.js v24 (instalado en esta máquina) y cómo `@expo/config-plugins` de SDK 54 resuelve `expo-image` como config plugin (su `package.json` en la versión de SDK 54 apunta `"main": "src/index.ts"`, fuente TS cruda con imports sin extensión, que el resolver de plugins intenta `require()` directo y choca con el soporte nativo y estricto de TypeScript de Node 24 para archivos dentro de `node_modules`). No afecta el uso del componente `<Image>` en ningún archivo — solo se usaba como string en `plugins` sin ninguna opción de configuración nativa.
+
+### Fixed
+- `PaymentWebViewScreen.tsx:128`: `{ ...StyleSheet.absoluteFill, ... }` → `{ ...StyleSheet.absoluteFillObject, ... }`. En RN 0.86 (SDK 57) el tipo de `StyleSheet.absoluteFill` estaba relajado a `any`, permitiendo el spread; en RN 0.81.5 (SDK 54) es `RegisteredStyle<T>` (un ID opaco, no spreadable), y `npx tsc --noEmit` lo marcó como error real. `absoluteFillObject` es el API que la propia documentación de tipos de React Native recomienda para spread + overrides — mismo comportamiento en runtime, tipado correcto en ambas versiones.
+
+### Verificado (mismo nivel que la subida a SDK 57)
+- `npx expo-doctor` → 18/18 checks passed.
+- `npx tsc --noEmit` → limpio (tras el fix de `absoluteFill`).
+- `npm test` → 9/9 tests pasando (los mismos que antes del rollback).
+- `npx expo install --check` → "Dependencies are up to date".
+- `npx expo start` → arrancó limpio, Metro sirviendo en `:8081` (`curl .../status` → `packager-status:running`).
+- Revisión dirigida de `expo-secure-store`, `react-native-webview`, `@react-native-async-storage/async-storage`, `@react-native-community/netinfo` y `posthog-react-native`: ninguna API que usa el código (`getItemAsync`/`setItemAsync`/`deleteItemAsync`, props del `WebView` de pago, `addEventListener`/`isConnected` de NetInfo, `capture`/`identify` de PostHog) falta o cambia de forma en las versiones de SDK 54. La única diferencia real encontrada en toda la revisión fue la de `absoluteFill` (ya corregida arriba).
+
+### Pending
+- **Este rollback es temporal.** Cuando Apple apruebe una versión de Expo Go compatible con SDK 55/56/57 (o superior), corresponde re-evaluar volver a subir de SDK, siguiendo el mismo proceso de verificación exhaustiva documentado en esta entrada.
+- No se tocó `boticuy-app-plugin/` ni el backend — este rollback es exclusivamente de la app cliente (`boticuy-app/`).
+
+---
+
 **Este changelog se actualiza con cada cambio futuro agregando una nueva entrada de versión — no se reescribe desde cero.**
