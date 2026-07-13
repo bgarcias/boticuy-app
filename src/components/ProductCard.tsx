@@ -22,7 +22,7 @@ export function ProductCard({
   onAdd: () => void;
   horizontal?: boolean;
 }) {
-  const img = product.images?.[0]?.src;
+  const img = product.images?.[0]?.thumbnail ?? product.images?.[0]?.src;
   const fav = useFavorites((s) => s.isFav(product.id));
   const toggleFav = useFavorites((s) => s.toggle);
   const showToast = useToast((s) => s.show);

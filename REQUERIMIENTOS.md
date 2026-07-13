@@ -129,7 +129,9 @@ Estas versiones se fijan al momento de arrancar el proyecto y quedan documentada
 | TypeScript | La que trae el template de `create-expo-app` para SDK 56 | Igual |
 | Node.js | LTS 22.x | Requisito de Expo CLI actual; usar vía `nvm`/`nvm-windows` para poder cambiar de versión si otro proyecto lo requiere |
 
-**Regla para evitar el desorden anterior:** el proyecto se crea con `npx create-expo-app@latest`, nunca instalando `expo` y sus dependencias sueltas a mano. Cualquier librería adicional se instala con `npx expo install <paquete>` (no `npm install` directo), porque ese comando resuelve automáticamente la versión compatible con el SDK 56 instalado. Después de cualquier instalación, correr `npx expo-doctor` para detectar desalineamientos antes de que se conviertan en bug.
+**Regla para evitar el desorden anterior:** el proyecto se crea con `npx create-expo-app@latest`, nunca instalando `expo` y sus dependencias sueltas a mano. Cualquier librería adicional se instala con `npx expo install <paquete>` (no `npm install` directo), porque ese comando resuelve automáticamente la versión compatible con el SDK instalado. Después de cualquier instalación, correr `npx expo-doctor` para detectar desalineamientos antes de que se conviertan en bug.
+
+> **Nota (2026-07-13):** la tabla de arriba fija SDK **56** como decisión original del arranque del proyecto (2026-07-08) — se deja tal cual para no reescribir esa decisión histórica. Desde el **2026-07-10** el proyecto corre en **SDK 54** por un rollback temporal (Expo Go en la App Store de iOS congelado en SDK 54; ver `boticuy-app/CHANGELOG.md` entrada [2.0.1] para el detalle y las condiciones para revertirlo). El estado vigente de versiones es siempre el de `package.json` + `CHANGELOG.md`, no el de esta tabla.
 
 ### Backend (WordPress / WooCommerce)
 

@@ -178,4 +178,14 @@ Refactorización técnica completa sobre la v1 original (app + backend), no un p
 
 ---
 
+## [2.0.2] - 2026-07-13
+
+### Fixed
+- **`ProductCard.tsx:25`**: pedía `product.images?.[0]?.src` (tamaño completo, hasta 1200px de ancho) para renderizar una tarjeta de solo 130px de alto, en vez de `.thumbnail` (300×300) que la Store API de WooCommerce ya devuelve en cada imagen. Encontrado en un diagnóstico de rendimiento de Home/ProductDetail/Catálogo, medido contra una imagen real de producto: 315,630 bytes (`.src`) → 34,701 bytes (`.thumbnail`), **~9.1× menos peso por imagen**. Fix: `product.images?.[0]?.thumbnail ?? product.images?.[0]?.src` — mismo patrón que ya estaba bien hecho en `cartStore.ts:40` (copiado de ahí, no reinventado). Como `ProductCard` es el componente de tarjeta compartido, el fix se propaga sin tocarlas a `HomeScreen`, `HorizontalProducts` (Home y `ProductDetailScreen`), `CatalogScreen` y `FavoritesScreen`. Estimado para la carga inicial de Home (≥16 tarjetas montadas sin scrollear, sección "Más vendidos" sin virtualización + "Para tu inmunidad" + "Vistos recientemente"): **~5 MB → ~550 KB**. `ImageGallery.tsx` (foto grande con zoom del detalle de producto) se dejó igual a propósito — ahí sí corresponde `.src` a tamaño completo. Detalle y verificación (typecheck, comparación visual) en `PROGRESO.md`.
+
+### Docs
+- `AGENTS.md`: la instrucción de consultar la documentación versionada de Expo apuntaba a `v56.0.0`, desactualizada desde el rollback a SDK 54 (`[2.0.1]`, 2026-07-10 — nunca se había corregido esa referencia). Corregida a `v54.0.0`, con una nota aclarando el rollback para que no se repita la confusión.
+
+---
+
 **Este changelog se actualiza con cada cambio futuro agregando una nueva entrada de versión — no se reescribe desde cero.**

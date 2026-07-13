@@ -55,8 +55,8 @@ export function CatalogScreen({ navigation, route }: Props) {
   }, [search, needs, marcas]);
 
   useEffect(() => {
-    fetchNecesidades().then(setNeeds).catch(() => {});
-    fetchMarcas().then(setMarcas).catch(() => {});
+    fetchNecesidades().then(setNeeds).catch(() => { });
+    fetchMarcas().then(setMarcas).catch(() => { });
   }, []);
 
   const marcaName = activeMarca

@@ -76,3 +76,45 @@ Cada fila tiene evidencia verificada en el código de ambos proyectos (o, cuando
 | **Entidades HTML sin decodificar en textos de WordPress/WooCommerce** | `src/utils/format.ts::stripHtml` y `src/components/RichHtml.tsx` tenían cada uno su propio mapa fijo de entidades con nombre (`&aacute;`, `&ntilde;`, etc.), pero **ninguno decodificaba entidades numéricas** (`&#8211;`, `&#8217;`...) — la regex de `RichHtml` las detectaba pero no las traducía, solo las dejaba pasar igual. Además, `product.name` (el nombre del producto) nunca pasaba por ninguna de las dos funciones. Bug real confirmado contra producción: `GET /wc/store/v1/products?search=mesitran` devuelve `"L &#8211; Mesitran Soft (cicatrizante)"` tal cual — se mostraba literal en la app. | Una sola función `decodeHtmlEntities()` en `utils/format.ts`, que decodifica entidades numéricas por código de punto (genérico, no una tabla fija) y las entidades con nombre comunes. `stripHtml()` y `RichHtml.tsx` la reutilizan (ya no duplican el mapa). Se aplica en la capa de API (`products.ts`, `taxonomies.ts`, `coupons.ts`, `orders.ts`) para que **todo** nombre/descripción de producto, categoría, marca, reseña o pedido llegue ya decodificado a cualquier pantalla. Verificado con el texto real de producción: `"L &#8211; Mesitran Soft"` → `"L – Mesitran Soft"`. | Corrige un bug visible real (no cosmético menor) que afectaba nombres de producto en todo el catálogo, carrito, pedidos y favoritos — y lo hace en un solo lugar en vez de en cada pantalla que muestre texto. |
 | **`originWhitelist` del WebView de pago** | `PaymentWebViewScreen.tsx:107` tenía `originWhitelist={['*']}` — el WebView que embebe el SDK de Izipay (Krypton) podía navegar a **cualquier origen**, hallazgo ya señalado en la auditoría original y nunca cerrado. | `originWhitelist={['https://boticuy.com', 'https://*.micuentaweb.pe']}` — acotado exactamente a los dos orígenes que la pantalla necesita (el `baseUrl` del HTML embebido y el dominio de Izipay Perú). | Cierra un hallazgo de seguridad pendiente desde la auditoría original, en la misma pantalla que se estaba migrando — no requirió trabajo aparte. |
 | **Aviso flotante (Toast) y barra de sin conexión (OfflineBanner)** | `Toast.tsx` y `OfflineBanner.tsx` montados en `App.tsx`, funcionando. | Migrados tal cual desde el legacy (`src/components/Toast.tsx`, `src/components/OfflineBanner.tsx`), montados en `App.tsx` junto al `RootNavigator`. `OfflineBanner` requirió instalar `@react-native-community/netinfo` vía `npx expo install`. | Cierra un hallazgo del barrido de paridad (`docs/historial/PARIDAD_CHECK.md`): el store `toastStore.ts` y 5 llamadas a `showToast()` ya existían en el rediseño sin ningún componente suscrito que las mostrara — bug activo, no solo funcionalidad ausente. |
+
+> **Nota (2026-07-13):** la fila "Consistencia de versiones del SDK de Expo" arriba describe el estado en el momento en que se escribió (proyecto creado en SDK 56). Desde entonces hubo un **rollback temporal a SDK 54** (`CHANGELOG.md` [2.0.1], 2026-07-10) por incompatibilidad de Expo Go con SDK 55+ en la App Store de iOS. La fila no se reescribe para no falsear el historial; el estado actual real de versiones está en `CHANGELOG.md` [2.0.1] y en `package.json`.
+
+---
+
+## Nota — Fix de rendimiento: miniaturas de imagen en tarjetas de producto (2026-07-13)
+
+Diagnóstico de por qué Home y `ProductDetailScreen` tardaban varios segundos en cargar (medido contra `boticuy.com` con `curl`, sin asumir la causa) encontró el hallazgo de mayor impacto: `ProductCard.tsx:25` pedía `product.images?.[0]?.src` (**tamaño completo**, 1200px de ancho) para renderizar una tarjeta de solo **130px de alto** (`ProductCard.tsx` estilo `image: { height: 130 }`).
+
+La Store API de WooCommerce ya devuelve, en cada imagen, un campo `.thumbnail` (300×300) además de `.src` — no hacía falta pedirle nada nuevo al backend. Medido con la imagen real de un producto (`glucosamina-y-condroitina.png`):
+
+| Versión | Peso | Uso |
+|---|---|---|
+| `.src` (la que se usaba) | 315,630 bytes | ninguno para una tarjeta de 130px |
+| `.thumbnail` (300×300, ahora en uso) | 34,701 bytes (**9.1× menos**) | exactamente lo que se necesita |
+
+**Fix:** `ProductCard.tsx:25` → `product.images?.[0]?.thumbnail ?? product.images?.[0]?.src` — mismo patrón exacto que ya estaba bien hecho en `cartStore.ts:40` (se copió de ahí, no se reinventó). `ImageGallery.tsx` (foto grande con zoom del detalle) se dejó intacta a propósito: ahí sí corresponde `.src` a tamaño completo.
+
+Como `ProductCard` es el componente compartido de tarjeta (usado directo en `HomeScreen` y a través de `HorizontalProducts` en Home/`ProductDetailScreen`, y también en `CatalogScreen`/`FavoritesScreen`), el fix se propagó a todas esas pantallas sin tocarlas — verificado por grep (`images?.[0]` solo aparecía en `ProductCard.tsx` y en el ya-correcto `cartStore.ts`).
+
+**Impacto estimado en Home:** al menos 16 tarjetas se montan de inmediato al abrir Home sin scrollear (6 de "Más vendidos" con `scrollEnabled=false`, sin virtualización, + "Para tu inmunidad" + "Vistos recientemente"). Con `.src` eso es del orden de **~5 MB** descargados solo en imágenes de tarjeta; con `.thumbnail`, **~550 KB** (9× menos).
+
+**Verificación:**
+- `npx tsc --noEmit` limpio.
+- Grep confirmó que no quedó ningún otro sitio con el mismo problema (`ImageGallery.tsx` usa `.src` a propósito, sin cambios).
+- Comparación visual lado a lado (mismo tamaño de tarjeta, 130px, densidad de pantalla 2x) entre la imagen completa y la miniatura: sin pixelación perceptible — el texto de la etiqueta del producto se lee igual en ambas. No se pudo probar dentro de la app real vía `expo start --web` en este entorno por un problema previo y no relacionado (ver nota abajo); se verificó con las imágenes reales de producción al tamaño y `object-fit` exactos que usa la tarjeta.
+
+**Hallazgo aparte, no relacionado con este fix:** `expo start --web` no llega a montar la app en este entorno — `zustand` incluye una verificación `import.meta.env` (para su integración opcional con Redux DevTools) que Metro sirve como script clásico (no `type="module"`), y el navegador tira `SyntaxError: Cannot use 'import.meta' outside a module` antes de que cualquier componente se ejecute. Es previo a este cambio (no lo causó `ProductCard.tsx`) y queda fuera de este fix — si se quiere depurar el preview web, hay que revisar la config de Metro para web o la versión de `zustand`.
+
+**Pendiente de este mismo diagnóstico, no bloqueante para este fix:** la cadena secuencial de 2 llamadas en la sección "Para tu inmunidad" de Home, el piso de ~1-1.6s por llamada REST (bootstrap de WordPress, no payload), la ausencia total de caché (cliente y servidor) para `/products`/`/product`/taxonomías, y el peso de metadata de Yoast SEO en las respuestas de taxonomía (82% del payload) — quedan para decidir en conjunto qué se ataca después.
+
+---
+
+## Riesgo de infraestructura — a monitorear en producción (2026-07-13)
+
+**Esto no es un pendiente ni una tarea a resolver ahora — es información de contexto para diagnósticos futuros**, separada a propósito de las tablas de fases y de los "Pendiente" de las notas anteriores.
+
+Durante el diagnóstico de rendimiento de Home/`ProductDetailScreen`/`CatalogScreen` de esta sesión se detectó que el servidor de WordPress de Boticuy muestra **contención real cuando recibe varias peticiones simultáneas originadas por un solo usuario navegando la app**. Comparando la misma llamada aislada (una petición a la vez) contra la misma llamada disparada junto con otras 3-4 en paralelo — el patrón real que usan `HomeScreen`, `ProductDetailScreen` y `CatalogScreen` vía `Promise.all` — cada petición individual tardó **35-90% más bajo concurrencia**, medido contra el mismo endpoint y el mismo entorno de red.
+
+Esto es una característica del **hosting actual** (compatible con contención en el pool de workers PHP-FPM de WordPress bajo carga concurrente, aunque no se pudo confirmar la causa exacta sin acceso al servidor) — **no es algo resoluble desde el código de la app ni del plugin**. No requiere acción ahora.
+
+**Cuándo importa:** si, después de salir a producción, se reportan tiempos de carga lentos con tráfico real de múltiples usuarios simultáneos, esta es una hipótesis a tener en cuenta. En ese escenario, la conversación con TI/hosting sería sobre **capacidad del servidor** (RAM, número de workers PHP, caché de servidor/objeto) — no sobre bugs de la app.
