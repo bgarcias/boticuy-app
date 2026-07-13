@@ -2,7 +2,7 @@ import { create } from 'zustand';
 import * as SecureStore from 'expo-secure-store';
 import type { AuthUser } from '../types';
 import { setAuthToken } from '../api/authToken';
-import { me } from '../api/auth';
+import { refreshSession } from '../api/auth';
 import { analytics } from '../analytics';
 
 const KEY = 'boticuy-auth';
@@ -28,20 +28,33 @@ export const useAuth = create<AuthState>((set) => ({
         const { token, user } = JSON.parse(raw);
         setAuthToken(token);
         set({ token, user });
-        // /auth/refresh no existe en el plugin real: validamos la sesión
-        // directamente contra /auth/me, sin renovar el token (dura 7 días fijos).
+        // Sesión deslizante: /auth/refresh revalida el token vigente y, si es
+        // válido, el plugin reemite uno nuevo (otros 7 días) — reemplaza la
+        // validación anterior contra /auth/me, que solo confirmaba sin renovar.
         try {
-          const r = await me();
-          if (r.ok && r.user) {
-            set({ user: r.user });
-          } else {
-            // 401: token inválido o expirado → cerrar sesión.
+          const r = await refreshSession();
+          if (r.ok === true && r.token && r.user) {
+            setAuthToken(r.token);
+            set({ token: r.token, user: r.user });
+            try {
+              await SecureStore.setItemAsync(KEY, JSON.stringify({ token: r.token, user: r.user }));
+            } catch {
+              /* noop: si no se pudo persistir, la sesión sigue viva en memoria hasta el próximo arranque */
+            }
+          } else if (r.ok === false) {
+            // 401 explícito del plugin ({ ok:false, reason:"Sesión expirada" }):
+            // sesión realmente inválida/expirada → cerrar sesión.
             setAuthToken(null);
             set({ token: null, user: null });
             await SecureStore.deleteItemAsync(KEY);
           }
+          // Cualquier otra respuesta (ej. 404 rest_no_route si el plugin
+          // desplegado todavía no tiene /auth/refresh, o un shape inesperado) no
+          // es una negación explícita de la sesión: se mantiene la sesión local
+          // tal cual, igual que un error de red — nunca se cierra sesión sin un
+          // "no" explícito del servidor.
         } catch {
-          /* sin conexión: se mantiene la sesión local y se revalida en el próximo arranque */
+          /* sin conexión: se mantiene la sesión local (con el token viejo) y se reintenta renovar en el próximo arranque */
         }
       }
     } catch {

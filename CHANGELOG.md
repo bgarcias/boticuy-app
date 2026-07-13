@@ -188,4 +188,19 @@ Refactorización técnica completa sobre la v1 original (app + backend), no un p
 
 ---
 
+## [2.0.3] - 2026-07-13
+
+### Added
+- **`refreshSession()`** en `src/api/auth.ts`: llama a `POST /auth/refresh` (Bearer token vigente vía interceptor, sin body), firma confirmada contra `boticuy-app-plugin/API-CONTRACT.md` — `200 { ok:true, token, user }` o `401 { ok:false, reason:"Sesión expirada" }`.
+- `authStore.hydrate()` ahora llama a `refreshSession()` en vez de `me()` al arrancar la app: si la sesión sigue vigente, el plugin reemite un token nuevo (otros 7 días) que se guarda en memoria, en el interceptor y en SecureStore — sesión deslizante real, en vez de la sesión de 7 días fijos sin renovación que había desde `[2.0.0]`.
+- **Manejo explícito de tres resultados**, no un simple truthy/else: `ok === true` (+ `token` + `user`) renueva la sesión; `ok === false` (401 real del plugin, `reason:"Sesión expirada"`) cierra sesión; **cualquier otra respuesta se trata igual que un error de red — mantiene la sesión local sin cerrarla**. Este tercer caso es intencional, no defensivo de sobra: ver nota abajo.
+
+### Verificado
+- `npx tsc --noEmit` limpio, `npx expo-doctor` 18/18.
+- **Hallazgo real contra producción** (sin crear ninguna cuenta): `POST /auth/refresh` contra `boticuy.com` devuelve hoy `404 {"code":"rest_no_route",...}` — confirmado con `/ping` (200) y `/auth/me` (401 normal) que el BFF sí está vivo, así que el 404 es específico de esta ruta. Esto confirma que **`boticuy-app-plugin/` (donde se implementó `/auth/refresh`, `[2.0.0]` de su propio changelog) todavía no está desplegado en WordPress** — sigue corriendo la versión anterior sin esta ruta.
+- Por eso el manejo de "cualquier otra respuesta" de arriba no es opcional: una respuesta `rest_no_route` no tiene campo `ok`, así que con la lógica anterior (truthy/else) habría caído en la rama de "sesión inválida" y cerrado la sesión de **todos** los usuarios en cada apertura de la app — el mismo bug de logout silencioso que ya se había corregido una vez (`PROGRESO.md`, Sección 2). Con el manejo explícito, hoy este cambio es un no-op seguro en producción (la app sigue comportándose como antes) y se activa solo, sin tocar código de nuevo, en cuanto se despliegue el plugin nuevo.
+- **Pendiente, fuera del alcance de este cambio:** desplegar `boticuy-app-plugin/` a WordPress (paso operativo). El camino de éxito (token válido → token renovado) queda verificado por contrato (`API-CONTRACT.md`) pero no de forma empírica contra una respuesta 200 real, porque no se puede provocar ese caso hasta ese despliegue.
+
+---
+
 **Este changelog se actualiza con cada cambio futuro agregando una nueva entrada de versión — no se reescribe desde cero.**
