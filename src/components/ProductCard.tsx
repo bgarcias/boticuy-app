@@ -9,6 +9,8 @@ import { useToast } from '../store/toastStore';
 import { analytics } from '../analytics';
 import { EV } from '../analytics/events';
 import { priceToSoles } from '../utils/format';
+import { ExternalPurchaseNotice } from './ExternalPurchaseNotice';
+import { getProductoNoVendible } from '../constants/productosNoVendibles';
 import { colors, radius, spacing, shadow } from '../theme';
 
 export function ProductCard({
@@ -22,7 +24,15 @@ export function ProductCard({
   onAdd: () => void;
   horizontal?: boolean;
 }) {
-  const img = product.images?.[0]?.thumbnail ?? product.images?.[0]?.src;
+  const thumbnail = product.images?.[0]?.thumbnail;
+  const full = product.images?.[0]?.src;
+  // Si el thumbnail 300x300 de WooCommerce no existe (no se regeneró para este
+  // producto), cae a la imagen original en vez de quedar en blanco. Se resetea
+  // por product.id porque este componente se recicla entre items en FlatList.
+  const [thumbFailed, setThumbFailed] = React.useState(false);
+  React.useEffect(() => setThumbFailed(false), [product.id]);
+  const img = (thumbFailed ? null : thumbnail) ?? full;
+  const noVendible = getProductoNoVendible(product.sku);
   const fav = useFavorites((s) => s.isFav(product.id));
   const toggleFav = useFavorites((s) => s.toggle);
   const showToast = useToast((s) => s.show);
@@ -42,7 +52,13 @@ export function ProductCard({
     >
       <View style={styles.imageWrap}>
         {img ? (
-          <Image source={{ uri: img }} style={styles.image} contentFit="contain" transition={150} />
+          <Image
+            source={{ uri: img }}
+            style={styles.image}
+            contentFit="contain"
+            transition={150}
+            onError={img === thumbnail ? () => setThumbFailed(true) : undefined}
+          />
         ) : (
           <View style={[styles.image, styles.noImage]} />
         )}
@@ -73,13 +89,17 @@ export function ProductCard({
         <Text style={styles.verText}>Ver detalle</Text>
         <Ionicons name="chevron-forward" size={12} color={colors.primary} />
       </View>
-      <Pressable
-        style={[styles.addBtn, !product.is_in_stock && styles.addBtnOff]}
-        onPress={handleAdd}
-        disabled={!product.is_in_stock}
-      >
-        <Text style={styles.addText}>{product.is_in_stock ? 'Agregar' : 'Sin stock'}</Text>
-      </Pressable>
+      {noVendible ? (
+        <ExternalPurchaseNotice url={noVendible.url} compact />
+      ) : (
+        <Pressable
+          style={[styles.addBtn, !product.is_in_stock && styles.addBtnOff]}
+          onPress={handleAdd}
+          disabled={!product.is_in_stock}
+        >
+          <Text style={styles.addText}>{product.is_in_stock ? 'Agregar' : 'Sin stock'}</Text>
+        </Pressable>
+      )}
     </Pressable>
   );
 }

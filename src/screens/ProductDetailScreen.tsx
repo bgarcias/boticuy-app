@@ -21,6 +21,8 @@ import { RichHtml } from '../components/RichHtml';
 import { ImageGallery } from '../components/ImageGallery';
 import { ErrorView } from '../components/Feedback';
 import { ProductDetailSkeleton } from '../components/Skeleton';
+import { ExternalPurchaseNotice } from '../components/ExternalPurchaseNotice';
+import { getProductoNoVendible } from '../constants/productosNoVendibles';
 import { stripHtml, priceToSoles } from '../utils/format';
 import { colors, spacing, radius } from '../theme';
 
@@ -113,6 +115,7 @@ export function ProductDetailScreen({ route, navigation }: Props) {
   if (error || !product) return <ErrorView message={error ?? undefined} onRetry={load} />;
 
   const lowStock = typeof product.low_stock_remaining === 'number' && product.low_stock_remaining > 0;
+  const noVendible = getProductoNoVendible(product.sku);
 
   return (
     <View style={styles.container}>
@@ -204,27 +207,33 @@ export function ProductDetailScreen({ route, navigation }: Props) {
       </ScrollView>
 
       <View style={[styles.bottomBar, { paddingBottom: insets.bottom + spacing.md }]}>
-        <View style={styles.qty}>
-          <Pressable style={styles.qtyBtn} onPress={() => setQty((q) => Math.max(1, q - 1))} hitSlop={6} accessibilityRole="button" accessibilityLabel="Disminuir cantidad">
-            <Text style={styles.qtyBtnText}>–</Text>
-          </Pressable>
-          <Text style={styles.qtyNum} accessibilityLabel={`Cantidad ${qty}`}>{qty}</Text>
-          <Pressable style={styles.qtyBtn} onPress={() => setQty((q) => q + 1)} hitSlop={6} accessibilityRole="button" accessibilityLabel="Aumentar cantidad">
-            <Text style={styles.qtyBtnText}>+</Text>
-          </Pressable>
-        </View>
-        <Pressable
-          style={[styles.cta, !product.is_in_stock && styles.ctaOff]}
-          disabled={!product.is_in_stock}
-          onPress={() => {
-            add(product, qty);
-            showToast(qty > 1 ? `${qty} agregados al carrito` : 'Agregado al carrito');
-            analytics.track(EV.ADD_TO_CART, { id: product.id, name: product.name, price: priceToSoles(product.prices), qty, source: 'detail' });
-            navigation.goBack();
-          }}
-        >
-          <Text style={styles.ctaText}>Agregar al carrito</Text>
-        </Pressable>
+        {noVendible ? (
+          <ExternalPurchaseNotice url={noVendible.url} />
+        ) : (
+          <>
+            <View style={styles.qty}>
+              <Pressable style={styles.qtyBtn} onPress={() => setQty((q) => Math.max(1, q - 1))} hitSlop={6} accessibilityRole="button" accessibilityLabel="Disminuir cantidad">
+                <Text style={styles.qtyBtnText}>–</Text>
+              </Pressable>
+              <Text style={styles.qtyNum} accessibilityLabel={`Cantidad ${qty}`}>{qty}</Text>
+              <Pressable style={styles.qtyBtn} onPress={() => setQty((q) => q + 1)} hitSlop={6} accessibilityRole="button" accessibilityLabel="Aumentar cantidad">
+                <Text style={styles.qtyBtnText}>+</Text>
+              </Pressable>
+            </View>
+            <Pressable
+              style={[styles.cta, !product.is_in_stock && styles.ctaOff]}
+              disabled={!product.is_in_stock}
+              onPress={() => {
+                add(product, qty);
+                showToast(qty > 1 ? `${qty} agregados al carrito` : 'Agregado al carrito');
+                analytics.track(EV.ADD_TO_CART, { id: product.id, name: product.name, price: priceToSoles(product.prices), qty, source: 'detail' });
+                navigation.goBack();
+              }}
+            >
+              <Text style={styles.ctaText}>Agregar al carrito</Text>
+            </Pressable>
+          </>
+        )}
       </View>
     </View>
   );

@@ -118,3 +118,16 @@ Durante el diagnóstico de rendimiento de Home/`ProductDetailScreen`/`CatalogScr
 Esto es una característica del **hosting actual** (compatible con contención en el pool de workers PHP-FPM de WordPress bajo carga concurrente, aunque no se pudo confirmar la causa exacta sin acceso al servidor) — **no es algo resoluble desde el código de la app ni del plugin**. No requiere acción ahora.
 
 **Cuándo importa:** si, después de salir a producción, se reportan tiempos de carga lentos con tráfico real de múltiples usuarios simultáneos, esta es una hipótesis a tener en cuenta. En ese escenario, la conversación con TI/hosting sería sobre **capacidad del servidor** (RAM, número de workers PHP, caché de servidor/objeto) — no sobre bugs de la app.
+
+---
+
+## Checklist antes de publicar a producción
+
+Agregada al cierre de la semana de pruebas en staging (16-23 julio 2026), para no olvidar nada al pasar de probar contra `http://35.209.93.250/` a subir el build final a las tiendas.
+
+- [ ] Confirmar que ningún build de producción se genera con `NODE_ENV=staging` ni con `.env.staging` (ya está resuelto por diseño: sin esa variable, cae a producción por defecto — ver `app.config.js` — pero confirmar en el build final antes de subir a Play Store).
+- [ ] Confirmar que el plugin de cleartext HTTP (`plugins/withCleartextHost.js`) no se incluye en el build de producción (ya está resuelto por diseño: solo se activa si el protocolo de `EXPO_PUBLIC_BFF_URL` es `http:` — pero confirmar en el build final, ej. inspeccionando el `AndroidManifest.xml` generado por `expo prebuild`).
+- [ ] Grep final de la IP de staging (`35.209.93.250`) en todo el proyecto antes de generar el build de producción, para descartar que haya quedado hardcodeada en algún lugar fuera de `.env.staging`.
+- [ ] Confirmar que el módulo de Izipay en el sitio de producción (`boticuy.com`) sigue en modo `PRODUCTION` (esto es configuración de WordPress, no de la app, pero relevante para no lanzar con pagos reales mal configurados).
+- [ ] Revisar que no queden `console.log` de diagnóstico temporales agregados durante la semana de pruebas.
+- [ ] Confirmar `ordersEnabled` en producción sigue en su valor real esperado (revisar si debe seguir en `false` hasta nueva decisión, o activarse para el lanzamiento).

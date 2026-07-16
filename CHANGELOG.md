@@ -203,4 +203,51 @@ Refactorización técnica completa sobre la v1 original (app + backend), no un p
 
 ---
 
+## [2.0.4] - Semana de pruebas en staging (2026-07-16 a 2026-07-23)
+
+Trabajo de esta semana relacionado con las pruebas de staging (`http://35.209.93.250/`, sin dominio propio todavía). Las validaciones funcionales de extremo a extremo (checkout Yape/Plin, precio dinámico, cupón, envío gratis) se probaron desde la app pero se documentan del lado del backend en `boticuy-app-plugin/CHANGELOG.md`, porque son en su mayoría comportamiento del servidor (cálculo de totales, estado del pedido) que la app solo refleja.
+
+### Added
+- **Entorno de staging seleccionable sin hardcodear ni tocar producción**: `.env.staging` (URLs de API + `EXPO_PUBLIC_ORDERS_ENABLED=true`, solo para este entorno), scripts `start:staging`/`android:staging`/`prebuild:staging` en `package.json` (usan `cross-env NODE_ENV=staging` para que Expo cargue `.env.staging`), `plugins/withCleartextHost.js` (config plugin de Expo que habilita tráfico HTTP en Android **solo** para el host de la URL de API activa — nunca de forma global, nunca en producción porque ahí la URL es `https://`). `app.config.js` deriva el host y decide si incluye el plugin según el protocolo de `EXPO_PUBLIC_BFF_URL`. Confirmado con `npx expo config --type public --json` (resolución real del CLI, no simulada) que sin `NODE_ENV=staging` todo cae a los defaults de producción existentes.
+
+### Fixed
+- **`ProductCard.tsx`**: agregado fallback `onError` — si el thumbnail 300×300 de un producto no carga (ej. WooCommerce nunca generó ese tamaño para esa imagen), reintenta con la imagen original (`.src`) en vez de quedar en blanco. Encontrado en la sección "Completa tu compra" del Carrito; como `ProductCard` es el componente compartido, el fix aplica también en Home, Catálogo, Favoritos y "También te puede interesar". No se tocó el backend — la causa de fondo (falta ese tamaño de imagen para ese producto en WordPress) sigue sin corregir ahí.
+- **`CheckoutScreen.tsx`**: el mensaje "Compra sin crear cuenta. Solo necesitamos tus datos de entrega." se mostraba siempre, incluso logueado. Ahora condicionado a `!user` (mismo `user` de `useAuth((s) => s.user)` que ya usaba la pantalla para precargar nombre/correo) — si hay sesión, el bloque no se renderiza, sin reemplazarlo por otro texto.
+
+### Pending
+- **Diagnóstico temporal activo en `src/api/orders.ts`**: dos `console.log` (carga del módulo y dentro de `createOrder()`) agregados para confirmar en tiempo real qué valores de `ordersEnabled`/`bffUrl` usa la instancia corriendo, mientras se investiga por qué un pedido de prueba en staging seguía saliendo como `PREVIEW-...`. Quitar una vez confirmado el diagnóstico.
+- **"Mis direcciones"**: permite eliminar una dirección guardada pero no editarla. Evaluar si conviene agregar edición.
+- **Mapeo de estados de pedido**: los 4 estados que muestra la app (Recibido, Preparando, En camino, Entregado) no tienen correspondencia confirmada contra los estados reales de WooCommerce — falta diagnosticar cómo está conectado esto hoy (detalle en `boticuy-app-plugin/CHANGELOG.md`).
+- **"Olvidé mi contraseña"**: no existe este flujo en la app. Opciones evaluadas sin decidir: redirección externa, WebView embebido, o flujo nativo contra un endpoint nuevo del plugin.
+
+---
+
+## [2.0.5] - Semana de pruebas en staging (2026-07-16 a 2026-07-23), continuación
+
+Fixes en `OrderDetailScreen.tsx` a partir de hallazgos de la misma semana de pruebas en staging — resuelve el pendiente "Mapeo de estados de pedido" de `[2.0.4]`. Validaciones funcionales de backend de esta tarde (cambio manual de estado en WooCommerce reflejado en el timeline) documentadas en `boticuy-app-plugin/CHANGELOG.md`.
+
+### Fixed
+- **Mapeo de estados de pedido**: `STEPS` tenía 4 pasos (Recibido, Preparando, **En camino**, Entregado) con slugs que WooCommerce nunca emite (`shipped`, `in-transit`, `delivered`) — el paso "En camino" era inalcanzable en la práctica. Corregido a **3 pasos reales**: Recibido (`pending`/`on-hold`), Preparando (`processing`), Entregado (`completed`). Los estados fuera del timeline (`cancelled`, `failed`, `refunded`) ahora muestran mensajes **diferenciados** en vez de tratarse todos igual como "cancelado": "Pedido cancelado", "Hubo un problema con el pago. Si ya pagaste, escríbenos por WhatsApp.", "Pedido reembolsado".
+- **Fallback silencioso a "Recibido"**: un `status_slug` no reconocido (`findIndex` devolviendo `-1`) hacía que el pedido se mostrara siempre en el paso 0, sin importar el estado real. Ahora, si el estado no es ninguno de los 3 del timeline ni `cancelled`/`failed`/`refunded`, se muestra la etiqueta real de WooCommerce (`order.status`) tal cual, en vez de asumir progreso cero. Como consecuencia, `current` (el índice del paso activo) ya no necesita ningún fallback — el timeline solo se calcula cuando el estado sí pertenece a él, así que siempre hay match.
+- **"Volver a pedir" fallaba en silencio**: productos sin stock, con stock insuficiente, o ya no disponibles (404 al buscar el producto) se omitían del carrito sin avisar cuál ni por qué — solo un toast genérico si *nada* se pudo agregar. Ahora cada producto valida `is_in_stock` y compara la cantidad original contra `low_stock_remaining` (la única cantidad exacta que expone la Store API; si viene `null`, se asume que alcanza). Se ajusta la cantidad cuando el stock es menor al pedido, y se notifica específicamente qué pasó con cada producto ("No se pudo agregar...", "Se ajustó la cantidad de... a N").
+
+### Changed
+- **`toastStore.ts` / `Toast.tsx`**: el `Toast` compartido ahora acepta `variant` (`'success' | 'warning'`) y `duration` opcionales en `show(mensaje, opts)` — antes el ícono (siempre de éxito) y la duración (1800ms fijos) estaban hardcodeados dentro del componente. Se usó para el aviso de "Volver a pedir" de arriba (ícono de advertencia, 5000ms — una lista de varios productos no se lee en 1.8s). Cambio retrocompatible: los 5 usos existentes de `showToast(mensaje)` en el resto de la app (`CreatorsScreen`, `ProductDetailScreen`, `CouponField`, `ProductCard`) siguen llamando con un solo argumento y no cambian de comportamiento (default `variant: 'success'`, `duration: 1800`). También se agregó `maxWidth`/`flexShrink` al estilo del toast para que un mensaje de varias líneas haga wrap en vez de desbordarse.
+
+---
+
+## [2.0.6] - Semana de pruebas en staging (2026-07-16 a 2026-07-23), continuación
+
+Caso "producto no vendible online" (ejemplo: Dr. Flu antigripal, SKU `1400006`) — diagnóstico previo (`boticuy-app-plugin/CHANGELOG.md`, misma semana) confirmó que en la web esto se resuelve con un link externo agregado a mano en el contenido Elementor de esa página puntual, sin ningún campo estructurado (categoría/atributo/meta) detrás. Se optó por resolverlo 100% del lado de la app en vez de esperar un cambio en WordPress/plugin.
+
+### Added
+- **`src/constants/productosNoVendibles.ts`**: lista fija `PRODUCTOS_NO_VENDIBLES` (`{ sku, url }[]`) + helper `getProductoNoVendible(sku)`. Agregar un caso futuro es sumar un objeto al array, nada más — no depende de ningún dato que venga de la Store API o del plugin.
+- **`ExternalPurchaseNotice.tsx`**: componente compartido con dos variantes — completa (texto explicando que el producto no se vende en línea + botón "Dónde comprar") y `compact` (solo el botón, para tarjetas de listado). Ambas abren la URL externa vía `Linking.openURL()`. Ícono `open-outline` de `@expo/vector-icons` (Ionicons) — no se agregó `lucide-react-native`, que no estaba instalado en el proyecto.
+
+### Changed
+- **`ProductDetailScreen.tsx`**: si el SKU del producto está en `productosNoVendibles`, la barra inferior completa (stepper de cantidad + "Agregar al carrito") se reemplaza por `ExternalPurchaseNotice` — chequeado antes que el stock, así que reemplaza el flujo de compra sin importar `is_in_stock`.
+- **`ProductCard.tsx`**: mismo chequeo: si el SKU está en la lista, el botón "Agregar"/"Sin stock" se reemplaza por `ExternalPurchaseNotice` en variante `compact`. Como `ProductCard` es el componente de tarjeta compartido, esto cubre Home, Catálogo, Favoritos y la sección "Completa tu compra" del Carrito automáticamente, sin tocar esas pantallas.
+
+---
+
 **Este changelog se actualiza con cada cambio futuro agregando una nueva entrada de versión — no se reescribe desde cero.**

@@ -1,5 +1,14 @@
 /** Config de Expo. Las URLs de API salen de variables de entorno EXPO_PUBLIC_*
- *  (con default a producción) en vez de ir hardcodeadas, a diferencia del legacy. */
+ *  (con default a producción) en vez de ir hardcodeadas, a diferencia del legacy.
+ *  Para apuntar a staging: `npm run start:staging` (carga .env.staging). Para
+ *  volver a producción: `npm start` (default, no toca nada). */
+const bffUrl = process.env.EXPO_PUBLIC_BFF_URL || 'https://boticuy.com/wp-json/boticuy-app/v1';
+const apiUrl = new URL(bffUrl);
+// El cleartext de Android solo se habilita, scoped a este host exacto, cuando
+// la URL de API del entorno activo es http:// (staging sin dominio/SSL propio
+// todavía). En producción (https) este plugin ni se incluye en el build.
+const needsCleartext = apiUrl.protocol === 'http:';
+
 module.exports = {
   expo: {
     name: 'boticuy-app',
@@ -24,11 +33,15 @@ module.exports = {
     web: {
       favicon: './assets/favicon.png',
     },
-    plugins: ['expo-font', 'expo-secure-store'],
+    plugins: [
+      'expo-font',
+      'expo-secure-store',
+      ...(needsCleartext ? [['./plugins/withCleartextHost', { host: apiUrl.hostname }]] : []),
+    ],
     extra: {
       storeApiUrl: process.env.EXPO_PUBLIC_STORE_API_URL || 'https://boticuy.com/wp-json/wc/store/v1',
       wpApiUrl: process.env.EXPO_PUBLIC_WP_API_URL || 'https://boticuy.com/wp-json/wp/v2',
-      bffUrl: process.env.EXPO_PUBLIC_BFF_URL || 'https://boticuy.com/wp-json/boticuy-app/v1',
+      bffUrl,
       // Mientras esté en false, createOrder() no llama a POST /order de verdad
       // (ver src/api/orders.ts) — evita crear pedidos reales durante el desarrollo.
       ordersEnabled: process.env.EXPO_PUBLIC_ORDERS_ENABLED === 'true',

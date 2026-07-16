@@ -12,17 +12,30 @@ import { colors, spacing, radius, shadow } from '../theme';
 
 type Props = NativeStackScreenProps<RootStackParamList, 'OrderDetail'>;
 
-// Pasos del pedido y a qué estados de WooCommerce corresponden.
+// Pasos del pedido y a qué estados reales de WooCommerce corresponden. Solo
+// se listan slugs que WooCommerce realmente emite (pending/on-hold/processing/
+// completed) — sin "en camino": WooCommerce no tiene un estado nativo para eso.
 const STEPS = [
   { key: 'recibido', label: 'Recibido', icon: 'receipt-outline' as const, slugs: ['pending', 'on-hold'] },
   { key: 'preparando', label: 'Preparando', icon: 'cube-outline' as const, slugs: ['processing'] },
-  { key: 'enviado', label: 'En camino', icon: 'bicycle-outline' as const, slugs: ['shipped', 'in-transit'] },
-  { key: 'entregado', label: 'Entregado', icon: 'checkmark-done-outline' as const, slugs: ['completed', 'delivered'] },
+  { key: 'entregado', label: 'Entregado', icon: 'checkmark-done-outline' as const, slugs: ['completed'] },
 ];
+
+// Avisos para estados que no son parte del timeline normal, cada uno con su
+// propio texto (antes los tres se mostraban igual como "cancelado").
+const STATUS_MESSAGES: Record<string, string> = {
+  cancelled: 'Pedido cancelado',
+  failed: 'Hubo un problema con el pago. Si ya pagaste, escríbenos por WhatsApp.',
+  refunded: 'Pedido reembolsado',
+};
 
 export function OrderDetailScreen({ route, navigation }: Props) {
   const { order } = route.params;
-  const cancelled = ['cancelled', 'refunded', 'failed'].includes(order.status_slug);
+  const isTimelineStatus = STEPS.some((s) => s.slugs.includes(order.status_slug));
+  // Para un estado no reconocido (ni en el timeline ni cancelled/failed/refunded),
+  // se usa la etiqueta real de WooCommerce (order.status) tal cual — nunca se
+  // asume "Recibido" para no mentir sobre el progreso del pedido.
+  const banner = STATUS_MESSAGES[order.status_slug] ?? (isTimelineStatus ? null : order.status);
   const add = useCart((s) => s.add);
   const showToast = useToast((s) => s.show);
   const [reordering, setReordering] = useState(false);
@@ -34,25 +47,41 @@ export function OrderDetailScreen({ route, navigation }: Props) {
     if (reorderable.length === 0) return;
     setReordering(true);
     let added = 0;
+    const issues: string[] = [];
     for (const it of reorderable) {
       try {
         const p = await fetchProduct(it.product_id!);
-        if (p.is_in_stock) {
-          add(p, it.qty);
-          added += 1;
+        // low_stock_remaining es la única cantidad exacta que da la Store API;
+        // si es null, WooCommerce no reporta stock bajo y se asume que alcanza.
+        const available = p.low_stock_remaining;
+        const qty = available != null ? Math.min(it.qty, available) : it.qty;
+        if (!p.is_in_stock || qty < 1) {
+          issues.push(`No se pudo agregar "${p.name}" (sin stock).`);
+          continue;
+        }
+        add(p, qty);
+        added += 1;
+        if (qty < it.qty) {
+          issues.push(`Se ajustó la cantidad de "${p.name}" a ${qty} (stock limitado).`);
         }
       } catch {
-        /* saltar el que falle */
+        issues.push(`No se pudo agregar "${it.name || 'un producto'}" (ya no está disponible).`);
       }
     }
     setReordering(false);
-    showToast(added > 0 ? 'Productos agregados al carrito' : 'No pudimos volver a agregar los productos');
+    if (issues.length > 0) {
+      // Lista de advertencias: variant warning + más tiempo en pantalla que el
+      // toast de éxito (1.8s no alcanza para leer varias líneas).
+      showToast(issues.join('\n'), { variant: 'warning', duration: 5000 });
+    } else {
+      showToast('Productos agregados al carrito');
+    }
     if (added > 0) navigation.navigate('Tabs', { screen: 'Carrito' } as never);
   };
 
-  // Índice del paso actual.
-  let current = STEPS.findIndex((s) => s.slugs.includes(order.status_slug));
-  if (current < 0) current = order.status_slug === 'completed' ? STEPS.length - 1 : 0;
+  // Índice del paso actual — solo se calcula cuando el estado sí es parte del
+  // timeline (isTimelineStatus), así que siempre hay match, nunca -1.
+  const current = STEPS.findIndex((s) => s.slugs.includes(order.status_slug));
 
   return (
     <ScrollView style={styles.container} contentContainerStyle={{ padding: spacing.lg }}>
@@ -61,10 +90,10 @@ export function OrderDetailScreen({ route, navigation }: Props) {
         <Text style={styles.date}>{order.date}</Text>
       </View>
 
-      {cancelled ? (
-        <View style={styles.cancelled}>
+      {banner ? (
+        <View style={styles.statusBanner}>
           <Ionicons name="close-circle" size={22} color={colors.error} />
-          <Text style={styles.cancelledText}>{order.status}</Text>
+          <Text style={styles.statusBannerText}>{banner}</Text>
         </View>
       ) : (
         <View style={styles.timeline}>
@@ -131,8 +160,8 @@ const styles = StyleSheet.create({
   header: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: spacing.lg },
   number: { fontSize: 18, fontWeight: '800', color: colors.text },
   date: { fontSize: 13, color: colors.textMuted },
-  cancelled: { flexDirection: 'row', alignItems: 'center', gap: 8, backgroundColor: '#fdeaea', borderRadius: radius.md, padding: spacing.lg },
-  cancelledText: { color: colors.error, fontWeight: '700', fontSize: 15 },
+  statusBanner: { flexDirection: 'row', alignItems: 'center', gap: 8, backgroundColor: '#fdeaea', borderRadius: radius.md, padding: spacing.lg },
+  statusBannerText: { color: colors.error, fontWeight: '700', fontSize: 15 },
   timeline: { backgroundColor: colors.white, borderRadius: radius.md, padding: spacing.lg, ...shadow.card },
   step: { flexDirection: 'row', alignItems: 'flex-start', gap: spacing.md },
   stepIconCol: { alignItems: 'center' },

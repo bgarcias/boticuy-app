@@ -345,12 +345,14 @@ export function CheckoutScreen({ navigation }: Props) {
   return (
     <KeyboardAvoidingView style={styles.container} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
       <ScrollView contentContainerStyle={{ padding: spacing.lg, paddingBottom: 120 }} keyboardShouldPersistTaps="handled">
-        {/* Aviso guest-first */}
-        <View style={styles.guestNote}>
-          <Text style={styles.guestNoteText}>
-            Compra sin crear cuenta. Solo necesitamos tus datos de entrega.
-          </Text>
-        </View>
+        {/* Aviso guest-first: solo para invitados, no aplica si ya está logueado */}
+        {!user && (
+          <View style={styles.guestNote}>
+            <Text style={styles.guestNoteText}>
+              Compra sin crear cuenta. Solo necesitamos tus datos de entrega.
+            </Text>
+          </View>
+        )}
 
         <Text style={styles.section}>Tus datos</Text>
         <TextField label="Nombre completo" required value={nombre} onChangeText={setNombre} error={errors.nombre} autoCapitalize="words" autoComplete="name" textContentType="name" />

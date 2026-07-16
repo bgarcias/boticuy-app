@@ -9,6 +9,8 @@ import { colors, radius, spacing, shadow } from '../theme';
 export function Toast() {
   const message = useToast((s) => s.message);
   const seq = useToast((s) => s.seq);
+  const variant = useToast((s) => s.variant);
+  const duration = useToast((s) => s.duration);
   const hide = useToast((s) => s.hide);
   const insets = useSafeAreaInsets();
   const opacity = useRef(new Animated.Value(0)).current;
@@ -21,16 +23,18 @@ export function Toast() {
       Animated.timing(opacity, { toValue: 0, duration: 220, useNativeDriver: true }).start(({ finished }) => {
         if (finished) hide();
       });
-    }, 1800);
+    }, duration);
     return () => clearTimeout(t);
-  }, [seq, message, opacity, hide]);
+  }, [seq, message, opacity, hide, duration]);
 
   if (!message) return null;
+
+  const isWarning = variant === 'warning';
 
   return (
     <Animated.View pointerEvents="none" style={[styles.wrap, { opacity, bottom: insets.bottom + 80 }]}>
       <View style={styles.toast}>
-        <Ionicons name="checkmark-circle" size={20} color={colors.success} />
+        <Ionicons name={isWarning ? 'warning' : 'checkmark-circle'} size={20} color={isWarning ? colors.warning : colors.success} />
         <Text style={styles.text}>{message}</Text>
       </View>
     </Animated.View>
@@ -43,11 +47,12 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: 8,
+    maxWidth: '90%',
     backgroundColor: colors.primaryDark,
     paddingHorizontal: spacing.lg,
     paddingVertical: spacing.md,
     borderRadius: radius.pill,
     ...shadow.card,
   },
-  text: { color: colors.white, fontWeight: '700', fontSize: 14 },
+  text: { color: colors.white, fontWeight: '700', fontSize: 14, flexShrink: 1 },
 });
