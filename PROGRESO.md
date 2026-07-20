@@ -131,3 +131,36 @@ Agregada al cierre de la semana de pruebas en staging (16-23 julio 2026), para n
 - [ ] Confirmar que el módulo de Izipay en el sitio de producción (`boticuy.com`) sigue en modo `PRODUCTION` (esto es configuración de WordPress, no de la app, pero relevante para no lanzar con pagos reales mal configurados).
 - [ ] Revisar que no queden `console.log` de diagnóstico temporales agregados durante la semana de pruebas.
 - [ ] Confirmar `ordersEnabled` en producción sigue en su valor real esperado (revisar si debe seguir en `false` hasta nueva decisión, o activarse para el lanzamiento).
+
+---
+
+## Funcionalidades pendientes de decisión de producto
+
+Funcionalidades donde el código actual no es un bug a corregir, sino una promesa de producto sin construir todavía — necesitan una decisión de negocio antes de poder estimar o empezar el desarrollo.
+
+### Canje de puntos por descuento
+
+**Estado real:** es una funcionalidad puramente visual, no tiene ninguna lógica detrás. La pantalla "Mis puntos" muestra el texto "100 puntos = S/5 de descuento en tu próxima compra" como copy de marketing, pero no existe ningún botón de canje, endpoint, ni mecanismo que aplique ese descuento a una compra. El balance de puntos se calcula correctamente (esto sí funciona, ver `CHANGELOG.md` del plugin), pero canjearlos por un descuento real no está construido.
+
+**Para implementarlo se necesita, como mínimo:**
+- **Backend:** nuevo endpoint de canje, un registro persistente de "puntos gastados" por usuario/pedido (hoy el balance se recalcula en vivo desde los pedidos completados, no hay ningún libro contable de puntos usados), y lógica de reversión de puntos si el pedido se cancela después de canjear.
+- **App:** interfaz en el checkout para que el usuario elija cuántos puntos canjear (o si es canje total/fijo) y vea el descuento reflejado antes de pagar.
+
+**Decisiones de negocio pendientes, antes de poder empezar a construir esto:**
+- ¿Cuánto se puede canjear por compra? ¿El balance completo, o hay un tope por transacción?
+- ¿Se puede combinar el canje de puntos con un cupón de descuento en la misma compra, o son mutuamente excluyentes?
+- ¿Qué pasa con los puntos canjeados si el pedido se cancela o el pago falla después del canje? ¿Se devuelven automáticamente al balance?
+- ¿Esta funcionalidad es necesaria para el lanzamiento inicial, o se puede publicar la v1 sin ella y agregarla en una actualización posterior?
+
+Esto es un feature completo de punta a punta, no un ajuste a algo existente. Requiere definición de producto antes de estimar tiempo de desarrollo.
+
+### Mis cupones
+
+**Estado real:** es una funcionalidad puramente visual, sin ninguna implementación. En "Mi cuenta", la fila "Mis cupones" muestra la etiqueta "Pronto" pero no es interactiva (no responde al toque), no tiene pantalla propia, y no existe ningún endpoint en el plugin que devuelva información de cupones asociada a un usuario específico (los 3 endpoints existentes de cupones son públicos/generales, no por usuario).
+
+A diferencia del canje de puntos, aquí falta incluso la definición básica de qué debería mostrar esta sección antes de poder estimar el desarrollo. Preguntas de producto pendientes:
+- ¿Debe mostrar un historial de cupones que el usuario ya usó en compras anteriores?
+- ¿Debe mostrar cupones personalizados/exclusivos asignados a ese usuario en particular (distinto de los cupones públicos de "Apoya a tu creador")?
+- ¿Debe ser simplemente un atajo a la lista pública de cupones activos, sin nada específico del usuario?
+
+Sin responder esto primero, no se puede definir qué construir en backend ni en frontend.

@@ -98,12 +98,13 @@ export interface Coupon {
   group?: 'copa' | 'fijo';
 }
 
-/** Creador (Copa o aliado fijo) con estado de su código. */
+/** Creador (Copa o aliado fijo) con estado de su código. `amount` es null
+ *  cuando el cupón todavía no está activo — nunca hay un % de relleno. */
 export interface Creator {
   code: string;
   name: string;
   channel: string;
-  amount: number;
+  amount: number | null;
   active: boolean;
 }
 

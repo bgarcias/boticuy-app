@@ -13,10 +13,11 @@ import { colors, spacing, radius, shadow } from '../theme';
 type Props = NativeStackScreenProps<RootStackParamList, 'OrderDetail'>;
 
 // Pasos del pedido y a qué estados reales de WooCommerce corresponden. Solo
-// se listan slugs que WooCommerce realmente emite (pending/on-hold/processing/
-// completed) — sin "en camino": WooCommerce no tiene un estado nativo para eso.
+// se listan slugs que WooCommerce realmente emite — sin "en camino": WooCommerce
+// no tiene un estado nativo para eso. "pending" no es parte del timeline: es un
+// estado especial (ver STATUS_MESSAGES) porque todavía no hay pago confirmado.
 const STEPS = [
-  { key: 'recibido', label: 'Recibido', icon: 'receipt-outline' as const, slugs: ['pending', 'on-hold'] },
+  { key: 'recibido', label: 'Recibido', icon: 'receipt-outline' as const, slugs: ['on-hold'] },
   { key: 'preparando', label: 'Preparando', icon: 'cube-outline' as const, slugs: ['processing'] },
   { key: 'entregado', label: 'Entregado', icon: 'checkmark-done-outline' as const, slugs: ['completed'] },
 ];
@@ -24,6 +25,7 @@ const STEPS = [
 // Avisos para estados que no son parte del timeline normal, cada uno con su
 // propio texto (antes los tres se mostraban igual como "cancelado").
 const STATUS_MESSAGES: Record<string, string> = {
+  pending: 'Pago pendiente. Este pedido no será procesado hasta que se confirme el pago.',
   cancelled: 'Pedido cancelado',
   failed: 'Hubo un problema con el pago. Si ya pagaste, escríbenos por WhatsApp.',
   refunded: 'Pedido reembolsado',

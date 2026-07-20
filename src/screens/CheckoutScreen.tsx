@@ -19,7 +19,7 @@ import { createOrder } from '../api/orders';
 import { getFormToken } from '../api/payment';
 import { analytics } from '../analytics';
 import { EV } from '../analytics/events';
-import { isValidEmail } from '../utils/validation';
+import { isValidEmail, isValidPhone, isValidDNI, stripInnerSpaces } from '../utils/validation';
 import { formatSoles } from '../utils/format';
 import { colors, spacing, radius } from '../theme';
 
@@ -190,8 +190,8 @@ export function CheckoutScreen({ navigation }: Props) {
     const e: Record<string, string> = {};
     if (!nombre.trim()) e.nombre = 'Ingresa tu nombre';
     if (!isValidEmail(email)) e.email = 'Correo inválido';
-    if (telefono.trim().length < 9) e.telefono = 'Teléfono inválido';
-    if (numDoc.trim().length < 8) e.numDoc = 'Documento inválido';
+    if (telefono.trim().length < 9 || !isValidPhone(telefono.trim())) e.telefono = 'Teléfono inválido';
+    if (stripInnerSpaces(numDoc.trim()).length < 8 || !isValidDNI(numDoc.trim())) e.numDoc = 'Documento inválido';
     if (!departamento) e.departamento = 'Elige departamento';
     if (!provincia) e.provincia = 'Elige provincia';
     if (!distrito) e.distrito = 'Elige distrito';
@@ -262,7 +262,7 @@ export function CheckoutScreen({ navigation }: Props) {
     };
     const orderPayload = {
       items: items.map((i) => ({ id: i.productId, qty: i.quantity })),
-      customer: { nombre: nombre.trim(), email: email.trim(), telefono: telefono.trim(), tipoDoc: 'DNI', numDoc: numDoc.trim() },
+      customer: { nombre: nombre.trim(), email: email.trim(), telefono: telefono.trim(), tipoDoc: 'DNI', numDoc: stripInnerSpaces(numDoc.trim()) },
       shipping: {
         departamento_cod: departamento!.codigo,
         provincia_cod: provincia!.codigo,

@@ -27,7 +27,9 @@ export function CreatorsScreen({ navigation }: Props) {
     setError(null);
     fetchCreators()
       .then((r) => {
-        setCopa(r.copa);
+        // Un cupón vencido de Copa Boticuy no va a reactivarse esta temporada —
+        // no tiene sentido mostrarlo ni como "Próximamente".
+        setCopa(r.copa.filter((c) => c.active));
         setFijo(r.fijo);
       })
       .catch(() => setError('No pudimos cargar los creadores.'))
@@ -36,6 +38,10 @@ export function CreatorsScreen({ navigation }: Props) {
   useEffect(load, []);
 
   const use = (c: Creator) => {
+    // Solo se llega acá desde el botón "Usar", que solo se muestra si c.active
+    // y por lo tanto c.amount ya es un número real (ver Card) — este guard es
+    // solo para que el tipo quede correcto, no debería dispararse en la práctica.
+    if (c.amount == null) return;
     setCoupon({ code: c.code, discount_type: 'percent', amount: c.amount, minimum_amount: 0 });
     analytics.track('apply_creator_coupon', { code: c.code, amount: c.amount });
     showToast(`Cupón ${c.code} aplicado 🎉`);
@@ -46,24 +52,20 @@ export function CreatorsScreen({ navigation }: Props) {
   if (error) return <ErrorView message={error} onRetry={load} />;
   if (copa.length === 0 && fijo.length === 0) return <Empty message="Pronto habrá códigos de creadores." />;
 
+  // Todo lo que llega acá ya es active:true — copa se filtra en load() y fijo
+  // siempre viene activo del plugin — así que Card no necesita rama "Próximamente".
   const Card = (c: Creator) => (
     <View key={c.code} style={styles.card}>
       <View style={styles.left}>
         {!!c.name && c.name !== c.code && <Text style={styles.name}>{c.name}</Text>}
         <Text style={styles.code}>{c.code}</Text>
         {!!c.channel && <Text style={styles.channel}>{c.channel}</Text>}
-        <Text style={styles.off}>{c.amount}% de descuento</Text>
+        {c.amount != null && <Text style={styles.off}>{c.amount}% de descuento</Text>}
       </View>
-      {c.active ? (
-        <Pressable style={styles.useBtn} onPress={() => use(c)}>
-          <Ionicons name="pricetag" size={16} color={colors.white} />
-          <Text style={styles.useText}>Usar</Text>
-        </Pressable>
-      ) : (
-        <View style={styles.soonPill}>
-          <Text style={styles.soonText}>Próximamente</Text>
-        </View>
-      )}
+      <Pressable style={styles.useBtn} onPress={() => use(c)}>
+        <Ionicons name="pricetag" size={16} color={colors.white} />
+        <Text style={styles.useText}>Usar</Text>
+      </Pressable>
     </View>
   );
 
@@ -123,6 +125,4 @@ const styles = StyleSheet.create({
   off: { fontSize: 13, color: colors.success, fontWeight: '700', marginTop: 2 },
   useBtn: { flexDirection: 'row', alignItems: 'center', gap: 6, backgroundColor: colors.primary, borderRadius: radius.pill, paddingHorizontal: spacing.lg, minHeight: 44 },
   useText: { color: colors.white, fontWeight: '800' },
-  soonPill: { backgroundColor: colors.surfaceAlt, borderRadius: radius.pill, paddingHorizontal: spacing.md, paddingVertical: 8 },
-  soonText: { color: colors.textMuted, fontWeight: '700', fontSize: 12 },
 });

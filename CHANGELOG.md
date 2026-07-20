@@ -250,4 +250,30 @@ Caso "producto no vendible online" (ejemplo: Dr. Flu antigripal, SKU `1400006`) 
 
 ---
 
+## [2.0.7] - Semana de pruebas en staging (2026-07-16 a 2026-07-23), continuación
+
+### Fixed
+- **`OrderDetailScreen.tsx`**: el estado `pending` (pendiente de pago) estaba dentro del timeline de 3 pasos, agrupado con `on-hold` en el paso "Recibido" — daba a entender que el pedido avanzaría solo, sin que nadie confirmara el pago. Ahora `pending` sale del timeline (`STEPS` solo mapea `on-hold`/`processing`/`completed`) y se muestra como aviso independiente, mismo tratamiento que `cancelled`/`failed`/`refunded`: "Pago pendiente. Este pedido no será procesado hasta que se confirme el pago." Confirmado que "Mis pedidos" (`OrdersScreen.tsx`) no se ve afectado — esa pantalla muestra la etiqueta cruda de WooCommerce (`item.status`) sin pasar por este mapeo.
+
+---
+
+## [2.0.8] - Semana de pruebas en staging (2026-07-16 a 2026-07-23), continuación
+
+Diagnóstico y fixes de "Apoya a tu creador" (Copa Boticuy + Creadores Aliados) — cambios de backend (detección automática, exclusiones, parsing de nombre/redes) documentados en `boticuy-app-plugin/CHANGELOG.md`; esta entrada cubre solo lo tocado en `boticuy-app/`.
+
+### Fixed
+- **`CreatorsScreen.tsx`**: Copa Boticuy ahora oculta por completo los cupones vencidos (`setCopa(r.copa.filter((c) => c.active))`) en vez de mostrarlos como "Próximamente" — un cupón vencido de la temporada no va a reactivarse, así que no tiene sentido seguir listándolo.
+
+### Removed
+- **Código muerto de la variante "Próximamente"** en `CreatorsScreen.tsx`: como consecuencia del fix anterior, ningún creador que llega a `Card` puede tener `active: false` (copa ya viene filtrado, y "fijo" siempre fue `active: true`) — se quitó la rama `soonPill`/"Próximamente" del componente `Card` y los estilos `soonPill`/`soonText`, sin ningún caso de uso real que la siguiera necesitando. Confirmado con `tsc --noEmit` y grep que no queda ningún rastro en código (solo en comentarios explicativos).
+
+---
+
+## [2.0.9] - Semana de pruebas en staging (2026-07-16 a 2026-07-23), continuación
+
+### Fixed
+- **Validación de formato en el checkout** (`src/utils/validation.ts`, `CheckoutScreen.tsx`): teléfono ahora rechaza cualquier carácter que no sea dígito, espacio, `+`, `-`, `(` o `)` (`isValidPhone`, mismo criterio que `WC_Validation::is_phone()` de WooCommerce en la web) — antes solo se exigía una longitud mínima, sin chequear que fueran caracteres válidos. DNI ahora exige solo dígitos (`isValidDNI`), con limpieza de espacios internos antes de validar y antes de enviarlo en el payload del pedido (`stripInnerSpaces`, no solo `trim()` de los extremos) — así `"12 345 678"` se valida y se envía igual que `"12345678"`.
+
+---
+
 **Este changelog se actualiza con cada cambio futuro agregando una nueva entrada de versión — no se reescribe desde cero.**
