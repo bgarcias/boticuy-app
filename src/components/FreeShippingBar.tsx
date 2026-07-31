@@ -2,14 +2,23 @@ import React from 'react';
 import { View, Text, StyleSheet } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import Constants from 'expo-constants';
+import type { PointsInfo } from '../types';
 import { colors, radius, spacing } from '../theme';
 import { formatSoles } from '../utils/format';
 
-const extra = (Constants.expoConfig?.extra ?? {}) as { envioGratisDesde?: number };
+const extra = (Constants.expoConfig?.extra ?? {}) as { envioGratisDesde?: number; envioGratisDesdeNivel?: number };
+
+interface Props {
+  subtotal: number;
+  /** Nivel de fidelidad del usuario logueado (null si no hay sesión) — Plata/Oro
+   * alcanzan el envío gratis con un umbral menor, mismo cálculo que el checkout
+   * real (`class-shipping.php`). */
+  level?: PointsInfo['level'] | null;
+}
 
 /** Barra de progreso hacia el envío gratis (nudge de conversión). */
-export function FreeShippingBar({ subtotal }: { subtotal: number }) {
-  const meta = extra.envioGratisDesde ?? 69;
+export function FreeShippingBar({ subtotal, level }: Props) {
+  const meta = level === 'plata' || level === 'oro' ? extra.envioGratisDesdeNivel ?? 59 : extra.envioGratisDesde ?? 69;
   const reached = subtotal >= meta;
   const pct = Math.max(0, Math.min(1, subtotal / meta));
   const falta = Math.max(0, meta - subtotal);

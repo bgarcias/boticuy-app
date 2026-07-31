@@ -33,7 +33,7 @@ const SLIDES: { icon: keyof typeof Ionicons.glyphMap; title: string; text: strin
   {
     icon: 'chatbubbles',
     title: 'Paga fácil y con asesoría',
-    text: 'Yape, Plin o contra entrega. Y te acompañamos por WhatsApp en todo el proceso.',
+    text: 'Yape, Plin o tarjeta. Y te acompañamos por WhatsApp en todo el proceso.',
   },
 ];
 

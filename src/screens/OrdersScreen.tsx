@@ -8,6 +8,7 @@ import type { Order } from '../types';
 import { fetchMyOrders } from '../api/orders';
 import { Loading, ErrorView, Empty } from '../components/Feedback';
 import { formatSoles } from '../utils/format';
+import { getOrderStatusLabelShort } from '../utils/orderStatus';
 import { colors, spacing, radius, shadow } from '../theme';
 
 type Props = NativeStackScreenProps<RootStackParamList, 'Orders'>;
@@ -46,7 +47,7 @@ export function OrdersScreen({ navigation }: Props) {
           </View>
           <View style={styles.statusRow}>
             <Ionicons name="ellipse" size={9} color={colors.primary} />
-            <Text style={styles.status}>{item.status}</Text>
+            <Text style={styles.status}>{getOrderStatusLabelShort(item.status_slug, item.status)}</Text>
           </View>
           {item.items.slice(0, 4).map((it, i) => (
             <Text key={i} style={styles.item} numberOfLines={1}>
@@ -71,7 +72,11 @@ const styles = StyleSheet.create({
   number: { fontSize: 15, fontWeight: '800', color: colors.text },
   date: { fontSize: 12, color: colors.textMuted },
   statusRow: { flexDirection: 'row', alignItems: 'center', gap: 6, marginTop: 4, marginBottom: spacing.sm },
-  status: { fontSize: 13, color: colors.primary, fontWeight: '700' },
+  // flex: 1 porque el texto ya no es siempre una sola palabra corta (WooCommerce
+  // "Processing") — algunos estados especiales (pending/cancelled/failed/refunded)
+  // usan la misma frase completa que el banner del detalle de pedido, así que
+  // necesita poder ocupar el ancho restante de la fila y hacer wrap normal.
+  status: { flex: 1, fontSize: 13, color: colors.primary, fontWeight: '700' },
   item: { fontSize: 13, color: colors.text, marginTop: 2 },
   more: { fontSize: 12, color: colors.textMuted, marginTop: 2 },
   totalRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', borderTopWidth: 1, borderTopColor: colors.border, marginTop: spacing.sm, paddingTop: spacing.sm },

@@ -8,36 +8,17 @@ import { fetchProduct } from '../api/products';
 import { useCart } from '../store/cartStore';
 import { useToast } from '../store/toastStore';
 import { formatSoles } from '../utils/format';
+import { ORDER_STEPS as STEPS, ORDER_STATUS_MESSAGES as STATUS_MESSAGES, isTimelineStatus } from '../utils/orderStatus';
 import { colors, spacing, radius, shadow } from '../theme';
 
 type Props = NativeStackScreenProps<RootStackParamList, 'OrderDetail'>;
 
-// Pasos del pedido y a qué estados reales de WooCommerce corresponden. Solo
-// se listan slugs que WooCommerce realmente emite — sin "en camino": WooCommerce
-// no tiene un estado nativo para eso. "pending" no es parte del timeline: es un
-// estado especial (ver STATUS_MESSAGES) porque todavía no hay pago confirmado.
-const STEPS = [
-  { key: 'recibido', label: 'Recibido', icon: 'receipt-outline' as const, slugs: ['on-hold'] },
-  { key: 'preparando', label: 'Preparando', icon: 'cube-outline' as const, slugs: ['processing'] },
-  { key: 'entregado', label: 'Entregado', icon: 'checkmark-done-outline' as const, slugs: ['completed'] },
-];
-
-// Avisos para estados que no son parte del timeline normal, cada uno con su
-// propio texto (antes los tres se mostraban igual como "cancelado").
-const STATUS_MESSAGES: Record<string, string> = {
-  pending: 'Pago pendiente. Este pedido no será procesado hasta que se confirme el pago.',
-  cancelled: 'Pedido cancelado',
-  failed: 'Hubo un problema con el pago. Si ya pagaste, escríbenos por WhatsApp.',
-  refunded: 'Pedido reembolsado',
-};
-
 export function OrderDetailScreen({ route, navigation }: Props) {
   const { order } = route.params;
-  const isTimelineStatus = STEPS.some((s) => s.slugs.includes(order.status_slug));
   // Para un estado no reconocido (ni en el timeline ni cancelled/failed/refunded),
   // se usa la etiqueta real de WooCommerce (order.status) tal cual — nunca se
   // asume "Recibido" para no mentir sobre el progreso del pedido.
-  const banner = STATUS_MESSAGES[order.status_slug] ?? (isTimelineStatus ? null : order.status);
+  const banner = STATUS_MESSAGES[order.status_slug] ?? (isTimelineStatus(order.status_slug) ? null : order.status);
   const add = useCart((s) => s.add);
   const showToast = useToast((s) => s.show);
   const [reordering, setReordering] = useState(false);

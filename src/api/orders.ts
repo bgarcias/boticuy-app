@@ -18,8 +18,10 @@ export interface CreateOrderPayload {
     interior: string;
     referencia: string;
   };
-  payment: 'cod' | 'yape' | 'tarjeta';
+  payment: 'yape' | 'tarjeta' | 'transferencia';
   coupon?: string;
+  /** Puntos a canjear como descuento (tope 30% del subtotal, no combinable con `coupon`). */
+  points_redeem?: number;
   /** Evita crear un pedido duplicado ante un doble tap o un retry de red (ver bcy_find_order_by_idempotency_key en el plugin). */
   idempotency_key?: string;
 }

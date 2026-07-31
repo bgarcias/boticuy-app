@@ -79,7 +79,7 @@ export interface UbigeoTerm {
   idUbigeo?: string; // solo distritos
 }
 
-export type PaymentMethod = 'cod' | 'yape' | 'tarjeta';
+export type PaymentMethod = 'yape' | 'tarjeta' | 'transferencia';
 
 /** Cotización de envío (calculada por WooCommerce según el distrito). */
 export interface ShippingQuote {
@@ -98,19 +98,14 @@ export interface Coupon {
   group?: 'copa' | 'fijo';
 }
 
-/** Creador (Copa o aliado fijo) con estado de su código. `amount` es null
- *  cuando el cupón todavía no está activo — nunca hay un % de relleno. */
+/** Cupón devuelto por /apoya-creador, /mis-cupones o /cupones-oro. `amount` es
+ *  null cuando el cupón todavía no está activo — nunca hay un % de relleno. */
 export interface Creator {
   code: string;
   name: string;
   channel: string;
   amount: number | null;
   active: boolean;
-}
-
-export interface CreatorsResponse {
-  copa: Creator[];
-  fijo: Creator[];
 }
 
 /** Cupón aplicado al carrito (validado por el BFF). */
@@ -145,6 +140,18 @@ export interface PointsInfo {
   level_name: string;
   next_level_at: number | null;
   soles_value: number;
+}
+
+/** Cuenta bancaria para "Transferencia bancaria" (parseada desde WooCommerce, ver /bank-details). */
+export interface BankAccount {
+  banco: string;
+  titular: string;
+  documento_tipo: string;
+  documento_numero: string;
+  numero_cuenta: string;
+  cci: string;
+  correo: string;
+  telefono: string;
 }
 
 /** Dirección guardada del usuario */

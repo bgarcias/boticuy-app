@@ -15,8 +15,10 @@ import { fetchAddresses, addAddress } from '../api/addresses';
 import { TextField } from '../components/TextField';
 import { SelectField } from '../components/SelectField';
 import { CouponField } from '../components/CouponField';
+import { PointsRedeemField } from '../components/PointsRedeemField';
 import { createOrder } from '../api/orders';
 import { getFormToken } from '../api/payment';
+import { fetchPoints } from '../api/points';
 import { analytics } from '../analytics';
 import { EV } from '../analytics/events';
 import { isValidEmail, isValidPhone, isValidDNI, stripInnerSpaces } from '../utils/validation';
@@ -34,8 +36,9 @@ function generateIdempotencyKey(): string {
 
 /**
  * Checkout — completo desde la Fase 4: tarjeta (Izipay, vía WebView), Yape/Plin
- * (sin subida de comprobante — coordinación manual por WhatsApp/email, igual
- * que el legacy) y contra entrega. Direcciones guardadas conectadas en la Fase 5.
+ * y transferencia bancaria (estas dos sin pasarela — coordinación manual del
+ * comprobante por WhatsApp/email). Direcciones guardadas conectadas en la Fase
+ * 5. Contra entrega retirado (decisión regulatoria, 2026-07-30) — ver `CHANGELOG.md`.
  */
 export function CheckoutScreen({ navigation }: Props) {
   const insets = useSafeAreaInsets();
@@ -83,8 +86,15 @@ export function CheckoutScreen({ navigation }: Props) {
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [submitting, setSubmitting] = useState(false);
 
+  // Canje de puntos: saldo no persistido — se revalida contra el servidor en
+  // cada sesión de checkout en vez de arrastrar un compromiso monetario entre
+  // reinicios de la app (igual criterio que metodoPago).
+  const [pointsBalance, setPointsBalance] = useState(0);
+  const [pointsToRedeem, setPointsToRedeem] = useState(0);
+  const pointsDiscount = Math.round(pointsToRedeem * 0.05 * 100) / 100;
+
   const envio = shipping ? shipping.cost : 0;
-  const finalTotal = Math.max(0, subtotal - discount + envio);
+  const finalTotal = Math.max(0, subtotal - discount - pointsDiscount + envio);
 
   useEffect(() => {
     fetchDepartamentos().then(setDeps).catch(() => {});
@@ -128,7 +138,15 @@ export function CheckoutScreen({ navigation }: Props) {
     setNombre((n) => n || user.nombre || '');
     setEmail((e) => e || user.email || '');
     fetchAddresses().then(setSavedAddresses).catch(() => {});
+    fetchPoints()
+      .then((info) => setPointsBalance(info.balance))
+      .catch(() => {});
   }, [user]);
+
+  // Al aplicar un cupón, se cancela cualquier canje de puntos en curso (mutuamente excluyentes).
+  useEffect(() => {
+    if (coupon) setPointsToRedeem(0);
+  }, [coupon]);
 
   const usarDireccion = async (a: SavedAddress) => {
     setDepartamento(a.departamento);
@@ -247,6 +265,7 @@ export function CheckoutScreen({ navigation }: Props) {
       payment: metodoPago,
       distrito: distrito?.nombre,
       coupon: coupon?.code,
+      points_redeem: pointsToRedeem || undefined,
     });
 
     const baseParams = {
@@ -258,7 +277,7 @@ export function CheckoutScreen({ navigation }: Props) {
       envio,
       total: finalTotal,
       coupon: coupon?.code,
-      discount,
+      discount: discount + pointsDiscount,
     };
     const orderPayload = {
       items: items.map((i) => ({ id: i.productId, qty: i.quantity })),
@@ -277,6 +296,7 @@ export function CheckoutScreen({ navigation }: Props) {
       },
       payment: metodoPago,
       coupon: coupon?.code,
+      points_redeem: pointsToRedeem || undefined,
       idempotency_key: idempotencyKey,
     };
 
@@ -316,8 +336,8 @@ export function CheckoutScreen({ navigation }: Props) {
       return;
     }
 
-    // Yape / contraentrega — mismo comportamiento: crear pedido y confirmar directo
-    // (Yape no sube comprobante; la coordinación del pago es manual, por WhatsApp/email).
+    // Yape / transferencia — crear pedido y confirmar directo, sin pasarela de
+    // por medio; la coordinación del comprobante es manual, por WhatsApp/email.
     setSubmitting(true);
     setErrors({});
     try {
@@ -413,21 +433,35 @@ export function CheckoutScreen({ navigation }: Props) {
           desc="Escanea el QR y sube tu comprobante"
         />
         <PayOption
-          active={metodoPago === 'cod'}
-          onPress={() => setMetodoPago('cod')}
-          title="Pago contra entrega"
-          desc="Paga en efectivo al recibir tu pedido"
+          active={metodoPago === 'transferencia'}
+          onPress={() => setMetodoPago('transferencia')}
+          title="Transferencia bancaria"
+          desc="Deposita a nuestra cuenta y envíanos tu comprobante"
         />
 
-        {/* Cupón */}
-        <Text style={styles.section}>Cupón de descuento</Text>
-        <CouponField />
+        {/* Cupón — oculto mientras haya un canje de puntos en curso (no combinables) */}
+        {pointsToRedeem === 0 && (
+          <>
+            <Text style={styles.section}>Cupón de descuento</Text>
+            <CouponField />
+          </>
+        )}
+
+        {/* Canje de puntos — oculto si ya hay un cupón aplicado (no combinables).
+            El título "Canjear puntos" vive dentro de PointsRedeemField, como
+            parte de su propia tarjeta autocontenida. */}
+        {user && !coupon && pointsBalance > 0 && (
+          <PointsRedeemField balance={pointsBalance} subtotal={subtotal} value={pointsToRedeem} onChange={setPointsToRedeem} />
+        )}
 
         {/* Resumen */}
         <View style={styles.summary}>
           <Row label="Subtotal" value={formatSoles(subtotal)} />
           {discount > 0 && (
             <Row label={`Descuento${coupon ? ` (${coupon.code})` : ''}`} value={`− ${formatSoles(discount)}`} highlight />
+          )}
+          {pointsDiscount > 0 && (
+            <Row label={`Puntos canjeados (${pointsToRedeem})`} value={`− ${formatSoles(pointsDiscount)}`} highlight />
           )}
           <Row
             label="Envío"

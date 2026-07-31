@@ -276,4 +276,90 @@ Diagnóstico y fixes de "Apoya a tu creador" (Copa Boticuy + Creadores Aliados) 
 
 ---
 
+## [2.4.1] - 2026-07-30
+
+### Changed
+- **`CreatorsScreen.tsx` ("Apoya a tu creador")**: agregada una segunda sección, "Otros cupones disponibles", con los cupones de `/mis-cupones` mostrados debajo de "Copa Boticuy" — siempre que haya alguno, no solo cuando Copa Boticuy viene vacío. Así la pantalla nunca se siente vacía y el usuario siempre tiene algo que usar.
+- **`MyCouponsScreen.tsx` ("Mis cupones")**: invertido el orden de las secciones — "Exclusivos Oro" ahora aparece primero (arriba) y "Disponibles" después (abajo), dado que los descuentos Oro suelen ser más altos y van con prioridad visual.
+
+### Verification
+- `npx tsc --noEmit` sin errores.
+
+---
+
+## [2.4.0] - 2026-07-30
+
+Consumo de los 3 endpoints nuevos que reemplazan `/creators` en el plugin (ver `boticuy-app-plugin/CHANGELOG.md` `[2.8.0]`).
+
+### Changed
+- **`src/api/coupons.ts`**: `fetchCreators()` reemplazado por `fetchApoyaCreador()` (`/apoya-creador`), `fetchMisCupones()` (`/mis-cupones`) y `fetchCuponesOro()` (`/cupones-oro`), cada uno devolviendo `Creator[]` directo (ya no hay un objeto `{copa, fijo}` que desarmar). Tipo `CreatorsResponse` eliminado de `types/index.ts` (ya no aplica).
+- **`CreatorsScreen.tsx` ("Apoya a tu creador")**: simplificada a un solo grupo (Copa Boticuy), vía `fetchApoyaCreador()`. Se quitó la sección "Creadores aliados" — ese bucket ya no existe como concepto separado: los cupones que antes caían ahí (no-Copa, no-Oro) ahora son indistinguibles de "Mis cupones" y viven en `/mis-cupones`.
+- **`MyCouponsScreen.tsx` ("Mis cupones")**: llama a `fetchMisCupones()` y `fetchCuponesOro()` en paralelo, mostrando dos grupos con encabezado — "Disponibles" y "Exclusivos Oro" (esta segunda sección solo aparece si el usuario tiene acceso a al menos un cupón Oro vigente, resuelto enteramente por el servidor).
+
+### Verification
+- `npx tsc --noEmit` sin errores.
+
+---
+
+## [2.3.0] - 2026-07-30
+
+Nuevo método de pago "Transferencia bancaria", mismo patrón que Yape/Plin (sin pasarela — coordinación manual del comprobante por WhatsApp). Cambios de backend correspondientes en `boticuy-app-plugin/CHANGELOG.md` `[2.6.0]`.
+
+### Added
+- `PaymentMethod` (`types/index.ts`) y los tipos de payload/params relacionados (`api/orders.ts`, `navigation/types.ts`) incluyen `'transferencia'`.
+- **`CheckoutScreen.tsx`**: nuevo `PayOption` "Transferencia bancaria". El flujo de envío (`onSubmit`) no necesitó ningún cambio de lógica — ya caía en la misma rama genérica que Yape (crear pedido y confirmar directo, sin paso de pasarela).
+- **Nuevo `src/api/bankDetails.ts`** (`fetchBankDetails()`) y tipo `BankAccount` (`types/index.ts`), consumiendo el endpoint nuevo `GET /bank-details` del plugin.
+- **`OrderConfirmationScreen.tsx`**: nueva rama para `metodoPago === 'transferencia'` — pide los datos bancarios al montar, muestra una cajita por banco (banco, titular, número de cuenta, CCI) más el texto de instrucciones de envío de comprobante y tiempos de entrega, con estado de carga y un mensaje de fallback ("Contáctanos por WhatsApp para los datos de la cuenta.") si el endpoint no puede parsear los datos.
+
+### Verification
+- `npx tsc --noEmit` sin errores.
+
+---
+
+## [2.2.1] - 2026-07-30
+
+### Changed
+- **`ForgotPasswordScreen.tsx`**: inyecta CSS vía `injectedJavaScript` para ocultar el "chrome" de administración de la página nativa de recuperación de WordPress (`wp-login.php?action=lostpassword`) — logo de WordPress, link "Ir a Boticuy" (`#nav`/`#backtoblog`), selector de idioma + botón "Cambiar" (`.language-switcher`), y "Políticas de privacidad" (`#privacy-policy-page-link`). El script se reinyecta en cada navegación del WebView (incluida la página "revisa tu correo" tras enviar el formulario), no toca el formulario ni sus campos — solo `display:none` sobre elementos ajenos a él.
+
+---
+
+## [2.2.0] - 2026-07-30
+
+Tres ajustes independientes, continuación de `[2.1.0]` (mismo día). Cambios de backend correspondientes en `boticuy-app-plugin/CHANGELOG.md` `[2.4.0]`.
+
+### Removed — Pago contra entrega
+- `PaymentMethod` (`types/index.ts`) y los tipos de payload/params relacionados (`api/orders.ts`, `navigation/types.ts`) ya no incluyen `'cod'` — solo `'yape' | 'tarjeta'`. `CheckoutScreen.tsx`: quitado el `PayOption` de "Pago contra entrega". `OrderConfirmationScreen.tsx`: quitada la rama muerta correspondiente en el resumen de pago. Copy actualizado en `OnboardingScreen.tsx` ("Yape, Plin o tarjeta").
+
+### Added — Envío gratis por nivel en el Carrito
+- **`FreeShippingBar.tsx`**: nuevo prop `level` — si es `'plata'`/`'oro'`, usa el umbral reducido (`extra.envioGratisDesdeNivel`, default S/59) en vez del general (`extra.envioGratisDesde`, S/69), mismo cálculo que ahora aplica el checkout real (`class-shipping.php`).
+- **`CartScreen.tsx`**: obtiene el nivel del usuario logueado vía `fetchPoints()` y lo pasa a `FreeShippingBar` — evita el mensaje inconsistente de "te faltan S/X" calculado sobre el umbral equivocado para un usuario Plata/Oro.
+- **`app.config.js`**: nueva variable `envioGratisDesdeNivel` (`EXPO_PUBLIC_ENVIO_GRATIS_DESDE_NIVEL`, default 59), mismo patrón que `envioGratisDesde`.
+
+### Verification
+- `npx tsc --noEmit` sin errores en cada uno de los tres cambios.
+
+---
+
+## [2.1.0] - 2026-07-30
+
+Cuatro cambios independientes pedidos por el usuario. Cambios de backend correspondientes documentados en `boticuy-app-plugin/CHANGELOG.md` `[2.3.0]`.
+
+### Changed
+- **`OrderDetailScreen.tsx`**: timeline colapsado de 3 a 2 pasos — "Recibido" (`on-hold`) → "Confirmado" (`processing`/`completed`, antes "Entregado" solo con `completed`). Se eliminó "Preparando" porque quedó sin ningún estado de WooCommerce distinto que lo disparara una vez que "Confirmado" pasó a activarse con `processing`. Copy correspondiente actualizado en `PointsScreen.tsx` ("los puntos se acreditan cuando tu pedido llega a 'Confirmado'").
+
+### Added — Canje de puntos en el checkout
+- **`PointsRedeemField.tsx`** (nuevo componente, mismo patrón que `CouponField.tsx`): balance disponible, tope visual del 30% del subtotal, input numérico + "Usar máximo".
+- **`CheckoutScreen.tsx`**: saldo de puntos cargado vía `fetchPoints()` al iniciar sesión; sección "Canjear puntos" mutuamente excluyente con el cupón (oculta una si la otra está activa, en ambas direcciones); `points_redeem` agregado al payload de `createOrder()`; total final resta también el descuento por puntos.
+
+### Added — Mis cupones
+- **`MyCouponsScreen.tsx`** (nueva pantalla, ruta `MyCoupons`): reemplaza el placeholder "Pronto" en "Mi cuenta". Lista general de cupones activos, reutilizando `fetchCreators()` (`/creators`) — el mismo endpoint que ya usa la lista pública "Apoya a tu creador" (`CreatorsScreen.tsx`). Sin historial de uso ni cupones exclusivos por usuario, tal como se pidió.
+
+### Added — Recuperar contraseña
+- **`ForgotPasswordScreen.tsx`** (nueva pantalla, ruta `ForgotPassword`): WebView embebido apuntando a `wp-login.php?action=lostpassword` del sitio (origen derivado de `EXPO_PUBLIC_BFF_URL`, sin env var nueva), mismo patrón que `PaymentWebViewScreen.tsx` (Izipay) — `originWhitelist` acotado al dominio de WordPress, sin salir a un navegador externo. Detecta la confirmación de envío vía `onNavigationStateChange` (`checkemail=confirm`) y muestra una pantalla nativa de "Revisa tu correo". Link "¿Olvidaste tu contraseña?" agregado en `LoginScreen.tsx`, visible solo en modo login.
+
+### Verification
+- `npx tsc --noEmit` sin errores. Sin suite de tests automatizados en el proyecto — verificación end-to-end en staging pendiente (canje de puntos con los 3 métodos de pago, reversión por cancelación/pago rechazado, "Mis cupones" y "Olvidé mi contraseña" en un dispositivo real).
+
+---
+
 **Este changelog se actualiza con cada cambio futuro agregando una nueva entrada de versión — no se reescribe desde cero.**

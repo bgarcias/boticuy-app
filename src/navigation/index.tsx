@@ -17,6 +17,7 @@ import { ProductDetailScreen } from '../screens/ProductDetailScreen';
 import { CartScreen } from '../screens/CartScreen';
 import { ProfileScreen } from '../screens/ProfileScreen';
 import { LoginScreen } from '../screens/LoginScreen';
+import { ForgotPasswordScreen } from '../screens/ForgotPasswordScreen';
 import { CheckoutScreen } from '../screens/CheckoutScreen';
 import { OrderConfirmationScreen } from '../screens/OrderConfirmationScreen';
 import { AddressesScreen } from '../screens/AddressesScreen';
@@ -24,6 +25,7 @@ import { OrdersScreen } from '../screens/OrdersScreen';
 import { OrderDetailScreen } from '../screens/OrderDetailScreen';
 import { PointsScreen } from '../screens/PointsScreen';
 import { CreatorsScreen } from '../screens/CreatorsScreen';
+import { MyCouponsScreen } from '../screens/MyCouponsScreen';
 import { FavoritesScreen } from '../screens/FavoritesScreen';
 import { PaymentWebViewScreen } from '../screens/PaymentWebViewScreen';
 
@@ -135,6 +137,7 @@ export function RootNavigator() {
           options={({ route }) => ({ title: route.params?.name ?? 'Producto' })}
         />
         <Stack.Screen name="Login" component={LoginScreen} options={{ title: 'Mi cuenta' }} />
+        <Stack.Screen name="ForgotPassword" component={ForgotPasswordScreen} options={{ title: 'Recuperar contraseña' }} />
         <Stack.Screen name="Checkout" component={CheckoutScreen} options={{ title: 'Finalizar compra' }} />
         <Stack.Screen
           name="OrderConfirmation"
@@ -146,6 +149,7 @@ export function RootNavigator() {
         <Stack.Screen name="OrderDetail" component={OrderDetailScreen} options={{ title: 'Detalle del pedido' }} />
         <Stack.Screen name="Points" component={PointsScreen} options={{ title: 'Mis puntos' }} />
         <Stack.Screen name="Creators" component={CreatorsScreen} options={{ title: 'Apoya a tu creador' }} />
+        <Stack.Screen name="MyCoupons" component={MyCouponsScreen} options={{ title: 'Mis cupones' }} />
         <Stack.Screen name="Favorites" component={FavoritesScreen} options={{ title: 'Mis favoritos' }} />
         <Stack.Screen name="PaymentWebView" component={PaymentWebViewScreen} options={{ title: 'Pago seguro' }} />
       </Stack.Navigator>

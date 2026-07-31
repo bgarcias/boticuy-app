@@ -52,6 +52,10 @@ module.exports = {
       // Reglas de negocio (antes en src/config.ts del legacy, centralizadas acá).
       currencySymbol: process.env.EXPO_PUBLIC_CURRENCY_SYMBOL || 'S/',
       envioGratisDesde: Number(process.env.EXPO_PUBLIC_ENVIO_GRATIS_DESDE) || 69,
+      // Umbral reducido para niveles Plata/Oro (ver `points_level()` en el plugin) —
+      // debe mantenerse en sync a mano con el literal equivalente en
+      // `class-shipping.php`, que es el que realmente calcula el envío en el checkout.
+      envioGratisDesdeNivel: Number(process.env.EXPO_PUBLIC_ENVIO_GRATIS_DESDE_NIVEL) || 59,
       whatsapp: process.env.EXPO_PUBLIC_WHATSAPP || '+51950557599',
       horarioAtencion: process.env.EXPO_PUBLIC_HORARIO_ATENCION || '9:00 AM – 6:00 PM',
     },

@@ -80,6 +80,12 @@ export function LoginScreen({ navigation }: Props) {
           textContentType={mode === 'register' ? 'newPassword' : 'password'}
         />
 
+        {mode === 'login' && (
+          <Pressable onPress={() => navigation.navigate('ForgotPassword')} hitSlop={8}>
+            <Text style={styles.forgot}>¿Olvidaste tu contraseña?</Text>
+          </Pressable>
+        )}
+
         {!!error && <Text style={styles.error}>{error}</Text>}
 
         <Pressable style={styles.cta} onPress={submit} disabled={loading}>
@@ -106,6 +112,7 @@ const styles = StyleSheet.create({
   tabText: { fontWeight: '700', color: colors.textMuted },
   tabTextActive: { color: colors.primary },
   error: { color: colors.error, fontSize: 13, marginBottom: spacing.sm },
+  forgot: { color: colors.primaryDark, fontSize: 13, fontWeight: '600', textAlign: 'right', marginBottom: spacing.md },
   cta: { backgroundColor: colors.primary, borderRadius: radius.pill, minHeight: 52, alignItems: 'center', justifyContent: 'center', marginTop: spacing.sm },
   ctaText: { color: colors.white, fontWeight: '800', fontSize: 16 },
   note: { fontSize: 12, color: colors.textMuted, textAlign: 'center', marginTop: spacing.lg, lineHeight: 18 },

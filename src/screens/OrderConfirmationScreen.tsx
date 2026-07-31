@@ -1,13 +1,14 @@
-import React, { useEffect } from 'react';
-import { View, Text, StyleSheet, Pressable, ScrollView } from 'react-native';
+import React, { useEffect, useState } from 'react';
+import { View, Text, StyleSheet, Pressable, ScrollView, ActivityIndicator } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
 
 import type { RootStackParamList } from '../navigation/types';
+import type { BankAccount } from '../types';
 import { useCart } from '../store/cartStore';
+import { fetchBankDetails } from '../api/bankDetails';
 import { formatSoles } from '../utils/format';
-import { orderHandlingMessage } from '../utils/attention';
 import { openWhatsApp } from '../utils/whatsapp';
 import { colors, spacing, radius } from '../theme';
 
@@ -17,7 +18,36 @@ export function OrderConfirmationScreen({ route, navigation }: Props) {
   const { nombre, email, distrito, metodoPago, envio, total, coupon, discount, orderNumber } = route.params;
   const insets = useSafeAreaInsets();
   const clear = useCart((s) => s.clear);
-  const handling = orderHandlingMessage();
+  // Texto fijo por método de pago — ya no depende del horario de atención
+  // (orderHandlingMessage()/attention.ts): Yape/Plin y transferencia se
+  // confirman recién cuando llega el comprobante (no es "hoy" vs "mañana a
+  // las 9"), y tarjeta no necesita mencionar ningún tiempo.
+  const handlingText =
+    metodoPago === 'tarjeta'
+      ? 'Estamos en línea para gestionar tu pedido.'
+      : 'Te confirmaremos por WhatsApp en cuanto recibamos tu comprobante.';
+
+  // Datos bancarios (transferencia) — se piden aparte porque, a diferencia de
+  // tarjeta/Yape, sí necesitan mostrar información real en esta pantalla.
+  const [bankLoading, setBankLoading] = useState(metodoPago === 'transferencia');
+  const [bankError, setBankError] = useState(false);
+  const [bancos, setBancos] = useState<BankAccount[]>([]);
+  const [instrucciones, setInstrucciones] = useState('');
+
+  useEffect(() => {
+    if (metodoPago !== 'transferencia') return;
+    fetchBankDetails()
+      .then((r) => {
+        if (r.ok && r.bancos && r.bancos.length > 0) {
+          setBancos(r.bancos);
+          setInstrucciones(r.instrucciones ?? '');
+        } else {
+          setBankError(true);
+        }
+      })
+      .catch(() => setBankError(true))
+      .finally(() => setBankLoading(false));
+  }, [metodoPago]);
 
   // Vaciar el carrito al llegar a la confirmación.
   useEffect(() => {
@@ -47,24 +77,46 @@ export function OrderConfirmationScreen({ route, navigation }: Props) {
               <Text style={styles.pagoTitle}>Pago con tarjeta ✓</Text>
               <Text style={styles.pagoText}>Tu pago fue procesado de forma segura por Izipay.</Text>
             </View>
-          ) : metodoPago === 'yape' ? (
+          ) : metodoPago === 'transferencia' ? (
+            <View style={styles.pago}>
+              <Text style={styles.pagoTitle}>Transferencia bancaria</Text>
+              {bankLoading ? (
+                <View style={styles.bankLoadingRow}>
+                  <ActivityIndicator size="small" color={colors.primary} />
+                  <Text style={styles.pagoText}>Cargando datos bancarios…</Text>
+                </View>
+              ) : bankError || bancos.length === 0 ? (
+                <Text style={styles.pagoText}>Contáctanos por WhatsApp para los datos de la cuenta.</Text>
+              ) : (
+                <>
+                  <Text style={styles.pagoText}>
+                    Realiza el depósito o transferencia a una de estas cuentas y envíanos tu comprobante por WhatsApp para confirmar tu pedido:
+                  </Text>
+                  {bancos.map((b) => (
+                    <View key={b.banco} style={styles.bankBox}>
+                      <Text style={styles.bankName}>{b.banco}</Text>
+                      <Row label="Titular" value={b.titular} />
+                      <Row label="N° de cuenta" value={b.numero_cuenta} />
+                      <Row label="CCI" value={b.cci} />
+                    </View>
+                  ))}
+                  {!!instrucciones && <Text style={styles.bankInstructions}>{instrucciones}</Text>}
+                </>
+              )}
+            </View>
+          ) : (
             <View style={styles.pago}>
               <Text style={styles.pagoTitle}>Pago con Yape / Plin</Text>
               <Text style={styles.pagoText}>
                 Te enviaremos el número y el QR de Yape a {email} y por WhatsApp para completar el pago y verificar tu pedido.
               </Text>
             </View>
-          ) : (
-            <View style={styles.pago}>
-              <Text style={styles.pagoTitle}>Pago contra entrega</Text>
-              <Text style={styles.pagoText}>Paga en efectivo al momento de recibir tu pedido.</Text>
-            </View>
           )}
         </View>
 
         <View style={styles.handling}>
           <Ionicons name="time-outline" size={18} color={colors.primaryDark} />
-          <Text style={styles.handlingText}>{handling.text}</Text>
+          <Text style={styles.handlingText}>{handlingText}</Text>
         </View>
 
         <Pressable
@@ -121,6 +173,10 @@ const styles = StyleSheet.create({
   pago: { gap: 4 },
   pagoTitle: { fontSize: 15, fontWeight: '700', color: colors.primaryDark },
   pagoText: { fontSize: 13, color: colors.textMuted, lineHeight: 19 },
+  bankLoadingRow: { flexDirection: 'row', alignItems: 'center', gap: 8 },
+  bankBox: { backgroundColor: colors.surface, borderRadius: radius.md, padding: spacing.md, marginTop: spacing.sm, gap: 2 },
+  bankName: { fontSize: 14, fontWeight: '800', color: colors.text, marginBottom: 2 },
+  bankInstructions: { fontSize: 12, color: colors.textMuted, marginTop: spacing.sm, lineHeight: 18 },
   handling: { flexDirection: 'row', alignItems: 'center', gap: 8, backgroundColor: '#eaf2ff', borderRadius: radius.md, padding: spacing.md, marginTop: spacing.lg, width: '100%' },
   handlingText: { flex: 1, fontSize: 13, color: colors.primaryDark, fontWeight: '600' },
   waBtn: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8, backgroundColor: colors.success, borderRadius: radius.pill, minHeight: 48, width: '100%', marginTop: spacing.md },

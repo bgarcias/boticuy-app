@@ -70,11 +70,15 @@ export function PointsScreen(_props: Props) {
 
       <Text style={styles.sectionTitle}>¿Cómo funciona?</Text>
       <View style={styles.card}>
-        <Bullet text="Ganas 1 punto por cada S/1 en compras entregadas." />
+        <Bullet text="Ganas 1 punto por cada S/1 en compras confirmadas." />
         <Bullet text="100 puntos = S/5 de descuento en tu próxima compra." />
         <Bullet text="Sube de nivel y desbloquea más beneficios." />
-        <Bullet text="Los puntos se acreditan cuando tu pedido llega a 'Entregado'." />
+        <Bullet text="Los puntos se acreditan cuando tu pedido llega a 'Confirmado'." />
       </View>
+
+      <Text style={styles.legalNote}>
+        El descuento por puntos tiene un tope de hasta 30% del subtotal por pedido, sin importar cuántos puntos tengas - no puedes cubrir toda la compra solo con puntos.
+      </Text>
     </ScrollView>
   );
 }
@@ -107,4 +111,8 @@ const styles = StyleSheet.create({
   levelMin: { fontSize: 13, color: colors.textMuted },
   bullet: { flexDirection: 'row', alignItems: 'flex-start', gap: 8, marginBottom: spacing.sm },
   bulletText: { flex: 1, fontSize: 14, color: colors.text, lineHeight: 20 },
+  // Nota tipo legal/términos — separada de la tarjeta "¿Cómo funciona?" a
+  // propósito, sin ícono ni checkmark, para que se lea como una aclaración
+  // aparte y no como un beneficio más de la lista.
+  legalNote: { fontSize: 11, color: colors.textMuted, lineHeight: 16, marginTop: spacing.md, paddingHorizontal: spacing.xs },
 });

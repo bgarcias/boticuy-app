@@ -14,7 +14,7 @@ export type ConfirmParams = {
   nombre: string;
   email: string;
   distrito: string;
-  metodoPago: 'cod' | 'yape' | 'tarjeta';
+  metodoPago: 'yape' | 'tarjeta' | 'transferencia';
   subtotal: number;
   envio: number;
   total: number;
@@ -28,6 +28,7 @@ export type RootStackParamList = {
   Tabs: NavigatorScreenParams<TabParamList> | undefined;
   ProductDetail: { id: number; name?: string };
   Login: undefined;
+  ForgotPassword: undefined;
   Checkout: undefined;
   OrderConfirmation: ConfirmParams;
   Addresses: undefined;
@@ -35,6 +36,7 @@ export type RootStackParamList = {
   OrderDetail: { order: Order };
   Points: undefined;
   Creators: undefined;
+  MyCoupons: undefined;
   Favorites: undefined;
   PaymentWebView: {
     orderId: number;

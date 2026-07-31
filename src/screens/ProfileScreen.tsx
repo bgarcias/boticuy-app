@@ -84,15 +84,11 @@ export function ProfileScreen({ navigation }: Props) {
             <Text style={styles.menuLabel}>Mis puntos</Text>
             <Ionicons name="chevron-forward" size={18} color={colors.textMuted} />
           </Pressable>
-          {[
-            { icon: 'pricetag-outline' as const, label: 'Mis cupones' },
-          ].map((r) => (
-            <View key={r.label} style={[styles.menuRow, styles.menuRowMuted]}>
-              <Ionicons name={r.icon} size={22} color={colors.textMuted} />
-              <Text style={[styles.menuLabel, { color: colors.textMuted }]}>{r.label}</Text>
-              <Text style={styles.soon}>Pronto</Text>
-            </View>
-          ))}
+          <Pressable style={[styles.menuRow, styles.menuRowLast]} onPress={() => navigation.navigate('MyCoupons')}>
+            <Ionicons name="pricetag-outline" size={22} color={colors.primaryDark} />
+            <Text style={styles.menuLabel}>Mis cupones</Text>
+            <Ionicons name="chevron-forward" size={18} color={colors.textMuted} />
+          </Pressable>
         </View>
       ) : (
         <>
@@ -146,7 +142,6 @@ const styles = StyleSheet.create({
   groupNote: { fontSize: 13, color: colors.textMuted, marginTop: spacing.lg, marginBottom: -spacing.sm, marginLeft: spacing.sm, fontWeight: '600' },
   menuLabel: { flex: 1, fontSize: 15, color: colors.text, fontWeight: '600' },
   count: { fontSize: 13, color: colors.white, backgroundColor: colors.primary, minWidth: 22, textAlign: 'center', paddingHorizontal: 6, paddingVertical: 2, borderRadius: radius.pill, overflow: 'hidden', fontWeight: '700' },
-  soon: { fontSize: 11, color: colors.white, backgroundColor: colors.textMuted, paddingHorizontal: 8, paddingVertical: 2, borderRadius: radius.sm, overflow: 'hidden' },
   help: { marginTop: spacing.xl, alignItems: 'center', gap: spacing.sm },
   helpTitle: { fontSize: 15, fontWeight: '700', color: colors.text },
   statusRow: { flexDirection: 'row', alignItems: 'center', gap: 6 },

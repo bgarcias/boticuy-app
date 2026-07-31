@@ -7,9 +7,11 @@ import type { CompositeScreenProps } from '@react-navigation/native';
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
 
 import type { TabParamList, RootStackParamList } from '../navigation/types';
-import type { Product } from '../types';
+import type { Product, PointsInfo } from '../types';
 import { useCart } from '../store/cartStore';
+import { useAuth } from '../store/authStore';
 import { fetchProducts } from '../api/products';
+import { fetchPoints } from '../api/points';
 import { FreeShippingBar } from '../components/FreeShippingBar';
 import { HorizontalProducts } from '../components/HorizontalProducts';
 import { CouponField } from '../components/CouponField';
@@ -31,13 +33,27 @@ export function CartScreen({ navigation }: Props) {
   const discount = useCart((s) => s.discount());
   const total = useCart((s) => s.total());
   const coupon = useCart((s) => s.coupon);
+  const user = useAuth((s) => s.user);
   const [recommended, setRecommended] = useState<Product[]>([]);
+  const [level, setLevel] = useState<PointsInfo['level'] | null>(null);
 
   useEffect(() => {
     fetchProducts({ perPage: 10, orderby: 'popularity' })
       .then((r) => setRecommended(r.products))
       .catch(() => {});
   }, []);
+
+  // Nivel de fidelidad, solo para mostrar el umbral de envío gratis correcto
+  // en la barra de progreso (Plata/Oro lo alcanzan antes) — ver FreeShippingBar.
+  useEffect(() => {
+    if (!user) {
+      setLevel(null);
+      return;
+    }
+    fetchPoints()
+      .then((info) => setLevel(info.level))
+      .catch(() => {});
+  }, [user]);
 
   const inCart = new Set(items.map((i) => i.productId));
   const suggestions = recommended.filter((p) => !inCart.has(p.id));
@@ -108,7 +124,7 @@ export function CartScreen({ navigation }: Props) {
       />
 
       <View style={styles.summary}>
-        <FreeShippingBar subtotal={subtotal} />
+        <FreeShippingBar subtotal={subtotal} level={level} />
         <CouponField />
         <View style={styles.lineRow}>
           <Text style={styles.lineLabel}>Subtotal</Text>
