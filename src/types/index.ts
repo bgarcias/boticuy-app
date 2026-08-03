@@ -154,9 +154,14 @@ export interface BankAccount {
   telefono: string;
 }
 
-/** Dirección guardada del usuario */
+/** Dirección guardada del usuario. `nombre`/`telefono`/`numDoc` son opcionales porque
+ *  el opt-in "Recordar mis datos" del checkout (`CheckoutScreen.tsx`) guarda una dirección
+ *  sin esos campos — solo `AddressFormScreen` los pide y los envía siempre. */
 export interface SavedAddress {
   id: string;
+  nombre?: string;
+  telefono?: string;
+  numDoc?: string;
   direccion: string;
   numero: string;
   interior: string;

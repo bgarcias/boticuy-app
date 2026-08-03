@@ -11,6 +11,11 @@ export async function addAddress(addr: Omit<SavedAddress, 'id'>): Promise<SavedA
   return res.data?.addresses ?? [];
 }
 
+export async function updateAddress(id: string, addr: Omit<SavedAddress, 'id'>): Promise<SavedAddress[]> {
+  const res = await bffClient.post<{ ok: boolean; addresses: SavedAddress[] }>('/addresses/update', { id, ...addr });
+  return res.data?.addresses ?? [];
+}
+
 export async function deleteAddress(id: string): Promise<SavedAddress[]> {
   const res = await bffClient.post<{ ok: boolean; addresses: SavedAddress[] }>('/addresses/delete', { id });
   return res.data?.addresses ?? [];

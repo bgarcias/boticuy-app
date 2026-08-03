@@ -21,6 +21,7 @@ import { ForgotPasswordScreen } from '../screens/ForgotPasswordScreen';
 import { CheckoutScreen } from '../screens/CheckoutScreen';
 import { OrderConfirmationScreen } from '../screens/OrderConfirmationScreen';
 import { AddressesScreen } from '../screens/AddressesScreen';
+import { AddressFormScreen } from '../screens/AddressFormScreen';
 import { OrdersScreen } from '../screens/OrdersScreen';
 import { OrderDetailScreen } from '../screens/OrderDetailScreen';
 import { PointsScreen } from '../screens/PointsScreen';
@@ -145,6 +146,11 @@ export function RootNavigator() {
           options={{ title: 'Confirmación', headerBackVisible: false, gestureEnabled: false }}
         />
         <Stack.Screen name="Addresses" component={AddressesScreen} options={{ title: 'Mis direcciones' }} />
+        <Stack.Screen
+          name="AddressForm"
+          component={AddressFormScreen}
+          options={({ route }) => ({ title: route.params?.address ? 'Editar dirección' : 'Agregar dirección' })}
+        />
         <Stack.Screen name="Orders" component={OrdersScreen} options={{ title: 'Mis pedidos' }} />
         <Stack.Screen name="OrderDetail" component={OrderDetailScreen} options={{ title: 'Detalle del pedido' }} />
         <Stack.Screen name="Points" component={PointsScreen} options={{ title: 'Mis puntos' }} />

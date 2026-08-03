@@ -149,6 +149,8 @@ export function CheckoutScreen({ navigation }: Props) {
   }, [coupon]);
 
   const usarDireccion = async (a: SavedAddress) => {
+    if (a.telefono) setTelefono(a.telefono);
+    if (a.numDoc) setNumDoc(a.numDoc);
     setDepartamento(a.departamento);
     setProvincia(a.provincia);
     setDistrito(a.distrito);
@@ -377,13 +379,9 @@ export function CheckoutScreen({ navigation }: Props) {
         <Text style={styles.section}>Tus datos</Text>
         <TextField label="Nombre completo" required value={nombre} onChangeText={setNombre} error={errors.nombre} autoCapitalize="words" autoComplete="name" textContentType="name" />
         <TextField label="Correo electrónico" required value={email} onChangeText={setEmail} error={errors.email} keyboardType="email-address" autoCapitalize="none" autoComplete="email" textContentType="emailAddress" />
-        <TextField label="Celular / WhatsApp" required value={telefono} onChangeText={setTelefono} error={errors.telefono} keyboardType="phone-pad" autoComplete="tel" textContentType="telephoneNumber" />
-        <TextField label="DNI" required value={numDoc} onChangeText={setNumDoc} error={errors.numDoc} keyboardType="number-pad" />
-
-        <Text style={styles.section}>Entrega a domicilio</Text>
         {user && savedAddresses.length > 0 && (
           <View style={styles.savedWrap}>
-            <Text style={styles.savedTitle}>Usar una dirección guardada</Text>
+            <Text style={styles.savedTitle}>Usar mis datos guardados</Text>
             <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: spacing.sm }}>
               {savedAddresses.map((a) => (
                 <Pressable key={a.id} style={styles.savedChip} onPress={() => usarDireccion(a)}>
@@ -396,6 +394,10 @@ export function CheckoutScreen({ navigation }: Props) {
             </ScrollView>
           </View>
         )}
+        <TextField label="Celular / WhatsApp" required value={telefono} onChangeText={setTelefono} error={errors.telefono} keyboardType="phone-pad" autoComplete="tel" textContentType="telephoneNumber" />
+        <TextField label="DNI" required value={numDoc} onChangeText={setNumDoc} error={errors.numDoc} keyboardType="number-pad" />
+
+        <Text style={styles.section}>Entrega a domicilio</Text>
         <SelectField label="Departamento" required value={departamento} options={deps} onSelect={onDep} error={errors.departamento} />
         <SelectField label="Provincia" required value={provincia} options={provs} onSelect={onProv} disabled={!departamento} loading={loadingProv} error={errors.provincia} />
         <SelectField label="Distrito" required value={distrito} options={dists} onSelect={setDistrito} disabled={!provincia} loading={loadingDist} error={errors.distrito} />

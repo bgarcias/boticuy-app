@@ -32,9 +32,13 @@ export function ProfileScreen({ navigation }: Props) {
     <ScrollView style={styles.container} contentContainerStyle={{ padding: spacing.lg }}>
       {user ? (
         <View style={styles.card}>
-          <Ionicons name="person-circle" size={64} color={colors.primary} />
-          <Text style={styles.title}>Hola, {user.nombre || 'cliente'} 👋</Text>
-          <Text style={styles.sub}>{user.email}</Text>
+          <View style={styles.headerRow}>
+            <Ionicons name="person-circle" size={40} color={colors.primary} />
+            <View>
+              <Text style={styles.title}>Hola, {user.nombre || 'cliente'} 👋</Text>
+              <Text style={styles.headerSub}>{user.email}</Text>
+            </View>
+          </View>
           <Pressable style={styles.logoutBtn} onPress={() => logout()}>
             <Ionicons name="log-out-outline" size={18} color={colors.error} />
             <Text style={styles.logoutText}>Cerrar sesión</Text>
@@ -131,6 +135,8 @@ const styles = StyleSheet.create({
   card: { backgroundColor: colors.white, borderRadius: radius.lg, padding: spacing.xl, alignItems: 'center', gap: spacing.sm },
   title: { fontSize: 20, fontWeight: '800', color: colors.text },
   sub: { fontSize: 14, color: colors.textMuted, textAlign: 'center' },
+  headerRow: { flexDirection: 'row', alignItems: 'center', gap: spacing.md },
+  headerSub: { fontSize: 14, color: colors.textMuted },
   btn: { backgroundColor: colors.primary, borderRadius: radius.pill, paddingVertical: 12, paddingHorizontal: 24, marginTop: spacing.sm },
   btnText: { color: colors.white, fontWeight: '700' },
   logoutBtn: { flexDirection: 'row', alignItems: 'center', gap: 6, marginTop: spacing.sm },

@@ -1,5 +1,5 @@
 import type { NavigatorScreenParams } from '@react-navigation/native';
-import type { Order } from '../types';
+import type { Order, SavedAddress } from '../types';
 
 /** Recortado a lo que existe en las Fases 1-5 más el pago con tarjeta/Yape (Fase 4). */
 export type TabParamList = {
@@ -32,6 +32,7 @@ export type RootStackParamList = {
   Checkout: undefined;
   OrderConfirmation: ConfirmParams;
   Addresses: undefined;
+  AddressForm: { address?: SavedAddress } | undefined;
   Orders: undefined;
   OrderDetail: { order: Order };
   Points: undefined;

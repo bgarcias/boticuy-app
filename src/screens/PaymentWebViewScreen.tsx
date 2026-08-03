@@ -41,7 +41,18 @@ function send(o){ if(window.ReactNativeWebView){ window.ReactNativeWebView.postM
 window.addEventListener('load', function(){
   if(!window.KR){ send({type:'error', message:'No se pudo cargar el formulario de pago'}); return; }
   KR.onSubmit(function(resp){ send({type:'submit', answer: resp.rawClientAnswer, hash: resp.hash}); return false; });
-  KR.onError(function(e){ send({type:'error', message:(e && e.errorMessage) || 'Error en el pago'}); });
+  KR.onError(function(e){
+    // Un rechazo real (tarjeta declinada, ACQ_001, etc.) trae la respuesta firmada
+    // completa en e.metadata.answer, igual que un pago aprobado; hay que reportarla
+    // al servidor para que el pedido no quede colgado en "pendiente de pago".
+    var answer = e && e.metadata && e.metadata.answer;
+    send({
+      type: 'error',
+      message: (e && e.errorMessage) || 'Error en el pago',
+      answer: answer && answer.rawClientAnswer,
+      hash: answer && answer.hash,
+    });
+  });
 });
 </script>
 </body></html>`;
@@ -60,6 +71,26 @@ export function PaymentWebViewScreen({ route, navigation }: Props) {
     navigation.replace('OrderConfirmation', { ...confirm });
   };
 
+  // Reporta la respuesta firmada de Izipay al servidor, venga de un submit normal
+  // o de un rechazo (onError) que trajo la transacción real. Si el servidor confirma
+  // que no se pagó, marca el pedido 'failed' y dispara la reversión de puntos.
+  const confirmPayment = async (answer: string, hash: string) => {
+    setValidating(true);
+    setError(null);
+    try {
+      const v = await validatePayment(orderId, answer, hash, checkoutToken);
+      if (v.ok && v.paid) {
+        complete();
+      } else {
+        setError(v.reason || 'El pago no se completó. Intenta de nuevo.');
+      }
+    } catch {
+      setError('No pudimos confirmar el pago. Revisa tu conexión.');
+    } finally {
+      setValidating(false);
+    }
+  };
+
   const onMessage = async (e: any) => {
     let msg: any;
     try {
@@ -68,24 +99,17 @@ export function PaymentWebViewScreen({ route, navigation }: Props) {
       return;
     }
     if (msg.type === 'error') {
+      // Rechazo real (hay transacción firmada que reportar) vs. error de validación
+      // de formulario antes de intentar cobrar (no hay nada que reportar al servidor).
+      if (msg.answer && msg.hash) {
+        await confirmPayment(msg.answer, msg.hash);
+        return;
+      }
       setError(msg.message || 'Ocurrió un error en el pago');
       return;
     }
     if (msg.type === 'submit') {
-      setValidating(true);
-      setError(null);
-      try {
-        const v = await validatePayment(orderId, msg.answer, msg.hash, checkoutToken);
-        if (v.ok && v.paid) {
-          complete();
-        } else {
-          setError(v.reason || 'El pago no se completó. Intenta de nuevo.');
-        }
-      } catch {
-        setError('No pudimos confirmar el pago. Revisa tu conexión.');
-      } finally {
-        setValidating(false);
-      }
+      await confirmPayment(msg.answer, msg.hash);
     }
   };
 

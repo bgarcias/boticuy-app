@@ -152,6 +152,19 @@ Construido de punta a punta: endpoint (`POST /order` extendido con `points_redee
 
 Decisión confirmada: lista general de cupones activos, sin historial de uso ni cupones exclusivos por usuario, reutilizando el mismo endpoint (`/creators`) que ya usa la lista pública "Apoya a tu creador". Pantalla nueva `MyCouponsScreen.tsx` (ruta `MyCoupons`), reemplaza el placeholder "Pronto" en "Mi cuenta". Detalle en `boticuy-app/CHANGELOG.md` `[2.1.0]`.
 
+## Nota — Editar/agregar dirección desde "Mis direcciones" (2026-08-03)
+
+Hasta esta sesión, `AddressesScreen` solo permitía listar y eliminar; la única forma de crear una dirección era el opt-in "Recordar mis datos" del checkout. Se agregó edición y creación directa desde la pantalla:
+
+- Pantalla nueva `AddressFormScreen.tsx` (ruta `AddressForm`, con `{ address?: SavedAddress }` opcional — sin dato precargado es modo "agregar", con dirección es modo "editar"), con su propia cascada departamento→provincia→distrito (copiada del patrón de `CheckoutScreen.tsx`, sin extraer ni modificar ese archivo).
+- Shape de `SavedAddress` ampliado con `nombre`, `telefono` y `numDoc` del destinatario (antes solo tenía datos de ubicación).
+- Backend: `class-addresses.php` gana `update_address()` (`POST /addresses/update`), mismo patrón que `add_address()`/`delete_address()`. Detalle en `boticuy-app-plugin/CHANGELOG.md` `[2.9.0]`.
+- `AddressesScreen`: ícono "Editar" junto al de eliminar en cada tarjeta, botón "Agregar dirección" en el estado vacío, y recarga automática de la lista al volver de `AddressFormScreen` (`useFocusEffect`).
+
+**Pendiente:** verificación real contra WordPress del endpoint `/addresses/update` y del flujo completo agregar/editar desde la app — no se pudo correr en este entorno. **Fuera de alcance de este cambio, a decidir después:** no hay botón para agregar una dirección adicional cuando la lista ya tiene al menos una (solo aparece en el estado vacío) — se implementó así porque fue lo pedido explícitamente; agregarlo es una extensión pequeña si se necesita.
+
+---
+
 ## Nota — Beneficios por nivel de fidelidad (2026-07-30)
 
 Dos beneficios nuevos atados al nivel de puntos (bronce/plata/oro, ver `Boticuy_App_Orders::points_level()` en el plugin), más el retiro de "Pago contra entrega" por decisión regulatoria — los tres cambios independientes, detalle completo en `boticuy-app-plugin/CHANGELOG.md` `[2.4.0]` y `boticuy-app/CHANGELOG.md` `[2.2.0]`:
