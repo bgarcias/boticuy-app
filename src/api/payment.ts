@@ -50,3 +50,14 @@ export async function validatePayment(
   });
   return res.data;
 }
+
+/**
+ * Avisa que el usuario abandonó el formulario de pago sin completarlo (salió de
+ * PaymentWebViewScreen por cualquier vía, sin un pago confirmado) — el servidor falla
+ * el pedido de inmediato en vez de esperar el barrido de 45 minutos. Idempotente y
+ * segura de llamar sin condiciones: el servidor solo actúa si el pedido sigue
+ * 'pending' de tarjeta. Fire-and-forget desde el cliente, nunca bloquea la navegación.
+ */
+export async function abandonPayment(orderId: number, checkoutToken?: string): Promise<void> {
+  await bffClient.post('/payment/abandon', { order_id: orderId, checkout_token: checkoutToken });
+}

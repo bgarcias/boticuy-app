@@ -1,11 +1,11 @@
-import React, { useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { View, Text, StyleSheet, ActivityIndicator, Pressable } from 'react-native';
 import { WebView } from 'react-native-webview';
 import { Ionicons } from '@expo/vector-icons';
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
 
 import type { RootStackParamList } from '../navigation/types';
-import { validatePayment } from '../api/payment';
+import { validatePayment, abandonPayment } from '../api/payment';
 import { useCart } from '../store/cartStore';
 import { colors, spacing, radius } from '../theme';
 
@@ -65,8 +65,15 @@ export function PaymentWebViewScreen({ route, navigation }: Props) {
   const [error, setError] = useState<string | null>(null);
   const clear = useCart((s) => s.clear);
 
+  // Refs (no state) porque beforeRemove puede disparar de forma síncrona como parte
+  // de la misma acción de navegación que dispara complete() — un ref se lee al
+  // instante, un state recién se ve reflejado en el siguiente render.
+  const validatingRef = useRef(false);
+  const completedRef = useRef(false);
+
   // El pedido ya se creó antes del pago; aquí solo se confirma y se limpia el carrito.
   const complete = () => {
+    completedRef.current = true;
     clear();
     navigation.replace('OrderConfirmation', { ...confirm });
   };
@@ -75,6 +82,7 @@ export function PaymentWebViewScreen({ route, navigation }: Props) {
   // o de un rechazo (onError) que trajo la transacción real. Si el servidor confirma
   // que no se pagó, marca el pedido 'failed' y dispara la reversión de puntos.
   const confirmPayment = async (answer: string, hash: string) => {
+    validatingRef.current = true;
     setValidating(true);
     setError(null);
     try {
@@ -87,6 +95,7 @@ export function PaymentWebViewScreen({ route, navigation }: Props) {
     } catch {
       setError('No pudimos confirmar el pago. Revisa tu conexión.');
     } finally {
+      validatingRef.current = false;
       setValidating(false);
     }
   };
@@ -112,6 +121,31 @@ export function PaymentWebViewScreen({ route, navigation }: Props) {
       await confirmPayment(msg.answer, msg.hash);
     }
   };
+
+  // Intercepta CUALQUIER forma de salir de esta pantalla sin pago confirmado: flecha
+  // del header, gesto de swipe, back físico de Android, y también el botón "Volver al
+  // checkout" de la rama de error (llama navigation.goBack(), que dispara este mismo
+  // evento) — un solo mecanismo para los dos casos.
+  //
+  // - Si hay una validación en curso (validatingRef): bloquea la salida sin diálogo.
+  //   Una respuesta real de Izipay se está procesando; dejar salir ahí arriesga que el
+  //   usuario abandone justo cuando el pago sí se completó.
+  // - Si no la hay y el pago no se completó (completedRef): avisa al servidor
+  //   (fire-and-forget, sin bloquear) y deja que la navegación siga normal. El endpoint
+  //   es idempotente y solo actúa si el pedido sigue 'pending' de tarjeta — llamarlo sin
+  //   condición adicional aquí es seguro.
+  useEffect(() => {
+    const unsubscribe = navigation.addListener('beforeRemove', (e) => {
+      if (validatingRef.current) {
+        e.preventDefault();
+        return;
+      }
+      if (!completedRef.current) {
+        abandonPayment(orderId, checkoutToken).catch(() => {});
+      }
+    });
+    return unsubscribe;
+  }, [navigation, orderId, checkoutToken]);
 
   if (error) {
     return (
