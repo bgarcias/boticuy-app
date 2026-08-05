@@ -69,7 +69,7 @@ export function CheckoutScreen({ navigation }: Props) {
   const [numero, setNumero] = useState('');
   const [interior, setInterior] = useState('');
   const [referencia, setReferencia] = useState('');
-  const [metodoPago, setMetodoPago] = useState<PaymentMethod>('yape');
+  const [metodoPago, setMetodoPago] = useState<PaymentMethod | null>(null);
 
   // Ubigeo data
   const [deps, setDeps] = useState<UbigeoTerm[]>([]);
@@ -217,6 +217,7 @@ export function CheckoutScreen({ navigation }: Props) {
     if (!distrito) e.distrito = 'Elige distrito';
     if (!direccion.trim()) e.direccion = 'Ingresa la dirección';
     if (!numero.trim()) e.numero = 'Nro';
+    if (!metodoPago) e.metodoPago = 'Debes seleccionar un método de pago';
     setErrors(e);
     return Object.keys(e).length === 0;
   };
@@ -274,7 +275,7 @@ export function CheckoutScreen({ navigation }: Props) {
       nombre: nombre.trim(),
       email: email.trim(),
       distrito: distrito!.nombre,
-      metodoPago,
+      metodoPago: metodoPago!,
       subtotal,
       envio,
       total: finalTotal,
@@ -296,7 +297,7 @@ export function CheckoutScreen({ navigation }: Props) {
         interior: interior.trim(),
         referencia: referencia.trim(),
       },
-      payment: metodoPago,
+      payment: metodoPago!,
       coupon: coupon?.code,
       points_redeem: pointsToRedeem || undefined,
       idempotency_key: idempotencyKey,
@@ -440,6 +441,7 @@ export function CheckoutScreen({ navigation }: Props) {
           title="Transferencia bancaria"
           desc="Deposita a nuestra cuenta y envíanos tu comprobante"
         />
+        {!!errors.metodoPago && <Text style={styles.paymentError}>{errors.metodoPago}</Text>}
 
         {/* Cupón — oculto mientras haya un canje de puntos en curso (no combinables) */}
         {pointsToRedeem === 0 && (
@@ -551,6 +553,7 @@ const styles = StyleSheet.create({
   summaryValue: { fontSize: 14, fontWeight: '700', color: colors.text },
   envioHint: { fontSize: 12, color: colors.textMuted, marginTop: 4 },
   submitError: { color: colors.error, fontSize: 13, textAlign: 'center', marginTop: spacing.md },
+  paymentError: { color: colors.error, fontSize: 12, marginTop: 4 },
   bottomBar: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: spacing.md, padding: spacing.lg, backgroundColor: colors.white, borderTopWidth: 1, borderTopColor: colors.border },
   totalLabel: { fontSize: 12, color: colors.textMuted },
   totalValue: { fontSize: 20, fontWeight: '800', color: colors.primary },
