@@ -5,11 +5,12 @@ import type { NativeStackScreenProps } from '@react-navigation/native-stack';
 
 import type { RootStackParamList } from '../navigation/types';
 import type { Creator } from '../types';
-import { fetchMisCupones, fetchCuponesOro } from '../api/coupons';
+import { fetchMisCupones, fetchCuponesOro, validateCoupon } from '../api/coupons';
 import { useCart } from '../store/cartStore';
 import { useToast } from '../store/toastStore';
 import { analytics } from '../analytics';
 import { Loading, ErrorView, Empty } from '../components/Feedback';
+import { formatSoles } from '../utils/format';
 import { colors, spacing, radius, shadow } from '../theme';
 
 type Props = NativeStackScreenProps<RootStackParamList, 'MyCoupons'>;
@@ -25,6 +26,7 @@ export function MyCouponsScreen({ navigation }: Props) {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const setCoupon = useCart((s) => s.setCoupon);
+  const subtotal = useCart((s) => s.subtotal());
   const showToast = useToast((s) => s.show);
 
   const load = () => {
@@ -40,12 +42,28 @@ export function MyCouponsScreen({ navigation }: Props) {
   };
   useEffect(load, []);
 
-  const use = (c: Creator) => {
+  const use = async (c: Creator) => {
     if (c.amount == null) return;
-    setCoupon({ code: c.code, discount_type: 'percent', amount: c.amount, minimum_amount: 0 });
-    analytics.track('apply_creator_coupon', { code: c.code, amount: c.amount });
-    showToast(`Cupón ${c.code} aplicado 🎉`);
-    navigation.navigate('Tabs', { screen: 'Catalogo' });
+    // Revalida contra /coupon en vez de asumir discount_type/minimum_amount: los
+    // listados de creador no traen el monto mínimo real del cupón en WooCommerce,
+    // así que aplicarlo a ciegas con minimum_amount:0 podía saltarse esa regla.
+    try {
+      const res = await validateCoupon(c.code);
+      if (!res.valid || !res.coupon) {
+        showToast(res.reason ?? 'Cupón no válido', { variant: 'warning' });
+        return;
+      }
+      if (res.coupon.minimum_amount && subtotal < res.coupon.minimum_amount) {
+        showToast(`Compra mínima ${formatSoles(res.coupon.minimum_amount)} para este cupón`, { variant: 'warning' });
+        return;
+      }
+      setCoupon(res.coupon);
+      analytics.track('apply_creator_coupon', { code: res.coupon.code, amount: res.coupon.amount });
+      showToast(`Cupón ${res.coupon.code} aplicado 🎉`);
+      navigation.navigate('Tabs', { screen: 'Catalogo' });
+    } catch {
+      showToast('No pudimos validar el cupón. Intenta de nuevo.', { variant: 'warning' });
+    }
   };
 
   if (loading) return <Loading label="Cargando cupones…" />;

@@ -45,13 +45,21 @@ export function CouponField() {
   };
 
   if (coupon) {
+    const belowMinimum = !!coupon.minimum_amount && subtotal < coupon.minimum_amount;
     return (
-      <View style={styles.appliedWrap}>
+      <View style={[styles.appliedWrap, belowMinimum && styles.appliedWrapWarn]}>
         <View style={styles.applied}>
-          <Ionicons name="pricetag" size={16} color={colors.success} />
-          <Text style={styles.appliedText}>
-            Cupón <Text style={{ fontWeight: '800' }}>{coupon.code}</Text> · −{formatSoles(discount)}
-          </Text>
+          <Ionicons name={belowMinimum ? 'alert-circle' : 'pricetag'} size={16} color={belowMinimum ? colors.warning : colors.success} />
+          {belowMinimum ? (
+            <Text style={styles.appliedText}>
+              Cupón <Text style={{ fontWeight: '800' }}>{coupon.code}</Text> — agrega{' '}
+              {formatSoles(coupon.minimum_amount - subtotal)} más para usarlo
+            </Text>
+          ) : (
+            <Text style={styles.appliedText}>
+              Cupón <Text style={{ fontWeight: '800' }}>{coupon.code}</Text> · −{formatSoles(discount)}
+            </Text>
+          )}
         </View>
         <Pressable onPress={() => setCoupon(null)} hitSlop={8}>
           <Text style={styles.remove}>Quitar</Text>
@@ -100,6 +108,7 @@ const styles = StyleSheet.create({
   btnText: { color: colors.white, fontWeight: '700' },
   error: { color: colors.error, fontSize: 12, marginTop: 6 },
   appliedWrap: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', backgroundColor: '#eafaf0', borderRadius: radius.md, padding: spacing.md, borderWidth: 1, borderColor: colors.success },
+  appliedWrapWarn: { backgroundColor: '#fff8e6', borderColor: colors.warning },
   applied: { flexDirection: 'row', alignItems: 'center', gap: 8, flex: 1 },
   appliedText: { color: colors.text, fontSize: 14 },
   remove: { color: colors.error, fontWeight: '700', fontSize: 13 },

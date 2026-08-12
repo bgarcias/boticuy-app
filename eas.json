@@ -12,6 +12,12 @@
       "distribution": "internal",
       "android": {
         "buildType": "apk"
+      },
+      "env": {
+        "EXPO_PUBLIC_STORE_API_URL": "http://35.209.93.250/wp-json/wc/store/v1",
+        "EXPO_PUBLIC_WP_API_URL": "http://35.209.93.250/wp-json/wp/v2",
+        "EXPO_PUBLIC_BFF_URL": "http://35.209.93.250/wp-json/boticuy-app/v1",
+        "EXPO_PUBLIC_ORDERS_ENABLED": "true"
       }
     },
     "production": {

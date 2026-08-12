@@ -1,7 +1,8 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useCallback } from 'react';
 import { View, Text, StyleSheet, FlatList, Pressable } from 'react-native';
 import { Image } from 'expo-image';
 import { Ionicons } from '@expo/vector-icons';
+import { useFocusEffect } from '@react-navigation/native';
 import type { BottomTabScreenProps } from '@react-navigation/bottom-tabs';
 import type { CompositeScreenProps } from '@react-navigation/native';
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
@@ -10,7 +11,8 @@ import type { TabParamList, RootStackParamList } from '../navigation/types';
 import type { Product, PointsInfo } from '../types';
 import { useCart } from '../store/cartStore';
 import { useAuth } from '../store/authStore';
-import { fetchProducts } from '../api/products';
+import { useToast } from '../store/toastStore';
+import { fetchProducts, fetchProduct } from '../api/products';
 import { fetchPoints } from '../api/points';
 import { FreeShippingBar } from '../components/FreeShippingBar';
 import { HorizontalProducts } from '../components/HorizontalProducts';
@@ -34,8 +36,50 @@ export function CartScreen({ navigation }: Props) {
   const total = useCart((s) => s.total());
   const coupon = useCart((s) => s.coupon);
   const user = useAuth((s) => s.user);
+  const showToast = useToast((s) => s.show);
   const [recommended, setRecommended] = useState<Product[]>([]);
   const [level, setLevel] = useState<PointsInfo['level'] | null>(null);
+
+  // Al abrir el carrito, revalida el stock real de cada producto contra lo
+  // guardado (que puede estar desactualizado) — mismo patrón que "Volver a
+  // pedir" en OrderDetailScreen: ajusta cantidad si el stock bajó, quita el
+  // ítem si ya no está disponible, y avisa con un solo toast al final.
+  const checkStock = useCallback(() => {
+    let cancelled = false;
+    (async () => {
+      const current = useCart.getState().items;
+      if (current.length === 0) return;
+      const issues: string[] = [];
+      for (const item of current) {
+        try {
+          const p = await fetchProduct(item.productId);
+          if (cancelled) return;
+          if (!p.is_in_stock) {
+            useCart.getState().remove(item.productId);
+            issues.push(`"${item.name}" ya no está disponible.`);
+            continue;
+          }
+          const available = p.low_stock_remaining;
+          const qty = available != null ? Math.min(item.quantity, available) : item.quantity;
+          if (qty < item.quantity) {
+            useCart.getState().setQty(item.productId, qty);
+            issues.push(`Se ajustó la cantidad de "${item.name}" a ${qty} (stock limitado).`);
+          }
+        } catch {
+          if (cancelled) return;
+          useCart.getState().remove(item.productId);
+          issues.push(`"${item.name}" ya no está disponible.`);
+        }
+      }
+      if (!cancelled && issues.length > 0) {
+        showToast(issues.join('\n'), { variant: 'warning', duration: 5000 });
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [showToast]);
+  useFocusEffect(checkStock);
 
   useEffect(() => {
     fetchProducts({ perPage: 10, orderby: 'popularity' })

@@ -9,11 +9,11 @@ const CLOSE_HOUR = 18;
 
 const WEEKDAYS = ['domingo', 'lunes', 'martes', 'miércoles', 'jueves', 'viernes', 'sábado'];
 
-// Feriados peruanos (MM-DD). Año-agnóstico para las fechas fijas.
+// Feriados peruanos de fecha fija (MM-DD, año-agnóstico). Jueves y Viernes
+// Santo son móviles (dependen de la Pascua) y se calculan aparte, ver
+// `isSemanaSantaFeriado`.
 const FERIADOS = new Set([
   '01-01', // Año Nuevo
-  '04-02', // Jueves Santo
-  '04-03', // Viernes Santo
   '05-01', // Día del Trabajo
   '06-29', // San Pedro y San Pablo
   '07-28', // Fiestas Patrias
@@ -26,6 +26,38 @@ const FERIADOS = new Set([
   '12-25', // Navidad
 ]);
 
+/** Domingo de Pascua para `year` (algoritmo gregoriano de Gauss/anónimo). Exportado para tests. */
+export function easterSunday(year: number): Date {
+  const a = year % 19;
+  const b = Math.floor(year / 100);
+  const c = year % 100;
+  const d = Math.floor(b / 4);
+  const e = b % 4;
+  const f = Math.floor((b + 8) / 25);
+  const g = Math.floor((b - f + 1) / 3);
+  const h = (19 * a + b - d - g + 15) % 30;
+  const i = Math.floor(c / 4);
+  const k = c % 4;
+  const l = (32 + 2 * e + 2 * i - h - k) % 7;
+  const m = Math.floor((a + 11 * h + 22 * l) / 451);
+  const month = Math.floor((h + l - 7 * m + 114) / 31); // 3 = marzo, 4 = abril
+  const day = ((h + l - 7 * m + 114) % 31) + 1;
+  return new Date(year, month - 1, day);
+}
+
+/** Jueves y Viernes Santo del año de `d` (feriados móviles ligados a la Pascua). */
+function isSemanaSantaFeriado(d: Date): boolean {
+  const easter = easterSunday(d.getFullYear());
+  const juevesSanto = new Date(easter);
+  juevesSanto.setDate(easter.getDate() - 3);
+  const viernesSanto = new Date(easter);
+  viernesSanto.setDate(easter.getDate() - 2);
+  return (
+    (d.getMonth() === juevesSanto.getMonth() && d.getDate() === juevesSanto.getDate()) ||
+    (d.getMonth() === viernesSanto.getMonth() && d.getDate() === viernesSanto.getDate())
+  );
+}
+
 /** Hora actual en Lima, independiente de la zona del dispositivo. */
 function limaNow(): Date {
   const d = new Date();
@@ -37,8 +69,9 @@ function mmdd(d: Date): string {
   return `${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
 }
 
-function isHoliday(d: Date): boolean {
-  return FERIADOS.has(mmdd(d));
+/** Exportado para tests. */
+export function isHoliday(d: Date): boolean {
+  return FERIADOS.has(mmdd(d)) || isSemanaSantaFeriado(d);
 }
 
 function isBusinessDay(d: Date): boolean {

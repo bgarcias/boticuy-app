@@ -8,6 +8,7 @@ import type { RootStackParamList } from '../navigation/types';
 import type { SavedAddress } from '../types';
 import { fetchAddresses, deleteAddress } from '../api/addresses';
 import { Loading, ErrorView } from '../components/Feedback';
+import { useToast } from '../store/toastStore';
 import { colors, spacing, radius, shadow } from '../theme';
 
 type Props = NativeStackScreenProps<RootStackParamList, 'Addresses'>;
@@ -16,6 +17,7 @@ export function AddressesScreen({ navigation }: Props) {
   const [addresses, setAddresses] = useState<SavedAddress[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const showToast = useToast((s) => s.show);
 
   const load = useCallback(() => {
     setLoading(true);
@@ -38,7 +40,7 @@ export function AddressesScreen({ navigation }: Props) {
           try {
             setAddresses(await deleteAddress(id));
           } catch {
-            /* noop */
+            showToast('No pudimos eliminar la dirección. Intenta de nuevo.', { variant: 'warning' });
           }
         },
       },

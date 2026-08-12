@@ -1,7 +1,7 @@
 import { useCart } from './cartStore';
 import type { Product } from '../types';
 
-const makeProduct = (id: number, priceCents: string): Product =>
+const makeProduct = (id: number, priceCents: string, lowStockRemaining: number | null = null): Product =>
   ({
     id,
     name: `Producto ${id}`,
@@ -25,7 +25,7 @@ const makeProduct = (id: number, priceCents: string): Product =>
     review_count: 0,
     is_in_stock: true,
     is_purchasable: true,
-    low_stock_remaining: null,
+    low_stock_remaining: lowStockRemaining,
   }) as Product;
 
 beforeEach(() => {
@@ -64,5 +64,28 @@ describe('cartStore', () => {
     useCart.getState().add(makeProduct(1, '5500'));
     useCart.getState().remove(1);
     expect(useCart.getState().items).toHaveLength(0);
+  });
+
+  test('add() topa la cantidad al stock disponible (low_stock_remaining)', () => {
+    useCart.getState().add(makeProduct(1, '5500', 3), 10);
+    expect(useCart.getState().items[0].quantity).toBe(3);
+  });
+
+  test('add() sobre un item existente también respeta el tope de stock', () => {
+    const p = makeProduct(1, '5500', 3);
+    useCart.getState().add(p, 2);
+    useCart.getState().add(p, 5);
+    expect(useCart.getState().items[0].quantity).toBe(3);
+  });
+
+  test('add() sin low_stock_remaining no aplica ningún tope', () => {
+    useCart.getState().add(makeProduct(1, '5500', null), 999);
+    expect(useCart.getState().items[0].quantity).toBe(999);
+  });
+
+  test('setQty() topa la cantidad al stock guardado en el item', () => {
+    useCart.getState().add(makeProduct(1, '5500', 3), 1);
+    useCart.getState().setQty(1, 50);
+    expect(useCart.getState().items[0].quantity).toBe(3);
   });
 });

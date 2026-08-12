@@ -196,4 +196,5 @@ export interface CartItem {
   image: string;
   unitPrice: number; // soles ya convertidos
   quantity: number;
+  stockLimit: number | null; // low_stock_remaining del producto al agregar/actualizar; null = sin tope conocido
 }

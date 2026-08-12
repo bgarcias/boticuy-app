@@ -26,20 +26,29 @@ export const useCart = create<CartState>()(
 
       add: (product, qty = 1) =>
         set((state) => {
+          // Mismo dato y mismo criterio que el tope del selector en
+          // ProductDetailScreen: low_stock_remaining es la única cantidad exacta
+          // que da la Store API; si es null, WooCommerce no reporta stock bajo y
+          // se asume que alcanza (sin tope).
+          const limit = typeof product.low_stock_remaining === 'number' ? product.low_stock_remaining : null;
           const existing = state.items.find((i) => i.productId === product.id);
           if (existing) {
+            const nextQty = limit != null ? Math.min(existing.quantity + qty, limit) : existing.quantity + qty;
             return {
               items: state.items.map((i) =>
-                i.productId === product.id ? { ...i, quantity: i.quantity + qty } : i
+                i.productId === product.id ? { ...i, quantity: nextQty, stockLimit: limit } : i
               ),
             };
           }
+          const initialQty = limit != null ? Math.min(qty, limit) : qty;
+          if (initialQty <= 0) return state; // sin stock disponible: no se agrega
           const item: CartItem = {
             productId: product.id,
             name: product.name,
             image: product.images?.[0]?.thumbnail ?? product.images?.[0]?.src ?? '',
             unitPrice: priceToSoles(product.prices),
-            quantity: qty,
+            quantity: initialQty,
+            stockLimit: limit,
           };
           return { items: [...state.items, item] };
         }),
@@ -52,7 +61,11 @@ export const useCart = create<CartState>()(
           items:
             qty <= 0
               ? state.items.filter((i) => i.productId !== productId)
-              : state.items.map((i) => (i.productId === productId ? { ...i, quantity: qty } : i)),
+              : state.items.map((i) => {
+                  if (i.productId !== productId) return i;
+                  const capped = i.stockLimit != null ? Math.min(qty, i.stockLimit) : qty;
+                  return { ...i, quantity: capped };
+                }),
         })),
 
       clear: () => set({ items: [], coupon: null }),

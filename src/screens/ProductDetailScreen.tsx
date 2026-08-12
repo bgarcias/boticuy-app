@@ -216,7 +216,14 @@ export function ProductDetailScreen({ route, navigation }: Props) {
                 <Text style={styles.qtyBtnText}>–</Text>
               </Pressable>
               <Text style={styles.qtyNum} accessibilityLabel={`Cantidad ${qty}`}>{qty}</Text>
-              <Pressable style={styles.qtyBtn} onPress={() => setQty((q) => q + 1)} hitSlop={6} accessibilityRole="button" accessibilityLabel="Aumentar cantidad">
+              <Pressable
+                style={styles.qtyBtn}
+                onPress={() => setQty((q) => (lowStock ? Math.min(product.low_stock_remaining!, q + 1) : q + 1))}
+                disabled={lowStock && qty >= product.low_stock_remaining!}
+                hitSlop={6}
+                accessibilityRole="button"
+                accessibilityLabel="Aumentar cantidad"
+              >
                 <Text style={styles.qtyBtnText}>+</Text>
               </Pressable>
             </View>
