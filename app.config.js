@@ -22,6 +22,7 @@ module.exports = {
       supportsTablet: true,
     },
     android: {
+      package: 'com.boticuy.app',
       adaptiveIcon: {
         backgroundColor: '#E6F4FE',
         foregroundImage: './assets/android-icon-foreground.png',
@@ -58,6 +59,9 @@ module.exports = {
       envioGratisDesdeNivel: Number(process.env.EXPO_PUBLIC_ENVIO_GRATIS_DESDE_NIVEL) || 59,
       whatsapp: process.env.EXPO_PUBLIC_WHATSAPP || '+51950557599',
       horarioAtencion: process.env.EXPO_PUBLIC_HORARIO_ATENCION || '9:00 AM – 6:00 PM',
+      eas: {
+        projectId: '69d21b22-44cc-467b-8de4-276a1f34d680',
+      },
     },
   },
 };

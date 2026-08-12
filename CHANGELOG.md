@@ -362,4 +362,4 @@ Cuatro cambios independientes pedidos por el usuario. Cambios de backend corresp
 
 ---
 
-**Este changelog se actualiza con cada cambio futuro agregando una nueva entrada de versión — no se reescribe desde cero.**
+**Este changelog se actualiza con cada cambio futuro agregando una nueva entrada de versión**
