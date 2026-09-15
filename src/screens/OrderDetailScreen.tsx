@@ -4,16 +4,18 @@ import { Ionicons } from '@expo/vector-icons';
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
 
 import type { RootStackParamList } from '../navigation/types';
-import { fetchProduct } from '../api/products';
+import { fetchProductsByIds } from '../api/products';
 import { useCart } from '../store/cartStore';
 import { useToast } from '../store/toastStore';
 import { formatSoles } from '../utils/format';
 import { ORDER_STEPS as STEPS, ORDER_STATUS_MESSAGES as STATUS_MESSAGES, isTimelineStatus } from '../utils/orderStatus';
+import { useRequireAuth } from '../hooks/useRequireAuth';
 import { colors, spacing, radius, shadow } from '../theme';
 
 type Props = NativeStackScreenProps<RootStackParamList, 'OrderDetail'>;
 
 export function OrderDetailScreen({ route, navigation }: Props) {
+  const authorized = useRequireAuth();
   const { order } = route.params;
   // Para un estado no reconocido (ni en el timeline ni cancelled/failed/refunded),
   // se usa la etiqueta real de WooCommerce (order.status) tal cual — nunca se
@@ -29,11 +31,21 @@ export function OrderDetailScreen({ route, navigation }: Props) {
   const onReorder = async () => {
     if (reorderable.length === 0) return;
     setReordering(true);
-    let added = 0;
-    const issues: string[] = [];
-    for (const it of reorderable) {
-      try {
-        const p = await fetchProduct(it.product_id!);
+    try {
+      // Una sola petición batch (mismo patrón que revalidateCart(), ver A1/B13
+      // en boticuy-hallazgos-completo.md) en vez de un fetchProduct() por ítem
+      // encadenado — un producto ausente de la respuesta es la señal de "ya no
+      // existe", sin necesidad de interpretar errores por producto.
+      const products = await fetchProductsByIds(reorderable.map((it) => it.product_id!));
+      const byId = new Map(products.map((p) => [p.id, p]));
+      let added = 0;
+      const issues: string[] = [];
+      for (const it of reorderable) {
+        const p = byId.get(it.product_id!);
+        if (!p) {
+          issues.push(`No se pudo agregar "${it.name || 'un producto'}" (ya no está disponible).`);
+          continue;
+        }
         // low_stock_remaining es la única cantidad exacta que da la Store API;
         // si es null, WooCommerce no reporta stock bajo y se asume que alcanza.
         const available = p.low_stock_remaining;
@@ -47,24 +59,29 @@ export function OrderDetailScreen({ route, navigation }: Props) {
         if (qty < it.qty) {
           issues.push(`Se ajustó la cantidad de "${p.name}" a ${qty} (stock limitado).`);
         }
-      } catch {
-        issues.push(`No se pudo agregar "${it.name || 'un producto'}" (ya no está disponible).`);
       }
+      if (issues.length > 0) {
+        // Lista de advertencias: variant warning + más tiempo en pantalla que el
+        // toast de éxito (1.8s no alcanza para leer varias líneas).
+        showToast(issues.join('\n'), { variant: 'warning', duration: 5000 });
+      } else {
+        showToast('Productos agregados al carrito');
+      }
+      if (added > 0) navigation.navigate('Tabs', { screen: 'Carrito' } as never);
+    } catch {
+      // Falló la petición completa (red/timeout/500): ante la duda, no se toca
+      // el carrito (mismo criterio que revalidateCart(), ver A1).
+      showToast('No pudimos revisar tus productos. Intenta de nuevo.', { variant: 'warning' });
+    } finally {
+      setReordering(false);
     }
-    setReordering(false);
-    if (issues.length > 0) {
-      // Lista de advertencias: variant warning + más tiempo en pantalla que el
-      // toast de éxito (1.8s no alcanza para leer varias líneas).
-      showToast(issues.join('\n'), { variant: 'warning', duration: 5000 });
-    } else {
-      showToast('Productos agregados al carrito');
-    }
-    if (added > 0) navigation.navigate('Tabs', { screen: 'Carrito' } as never);
   };
 
   // Índice del paso actual — solo se calcula cuando el estado sí es parte del
   // timeline (isTimelineStatus), así que siempre hay match, nunca -1.
   const current = STEPS.findIndex((s) => s.slugs.includes(order.status_slug));
+
+  if (!authorized) return null;
 
   return (
     <ScrollView style={styles.container} contentContainerStyle={{ padding: spacing.lg }}>

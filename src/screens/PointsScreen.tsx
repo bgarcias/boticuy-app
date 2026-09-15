@@ -6,6 +6,7 @@ import type { NativeStackScreenProps } from '@react-navigation/native-stack';
 import type { RootStackParamList } from '../navigation/types';
 import type { PointsInfo } from '../types';
 import { fetchPoints } from '../api/points';
+import { useRequireAuth } from '../hooks/useRequireAuth';
 import { Loading, ErrorView } from '../components/Feedback';
 import { formatSoles } from '../utils/format';
 import { colors, spacing, radius, shadow } from '../theme';
@@ -19,6 +20,7 @@ const LEVELS = [
 ];
 
 export function PointsScreen(_props: Props) {
+  const authorized = useRequireAuth();
   const [info, setInfo] = useState<PointsInfo | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -33,6 +35,7 @@ export function PointsScreen(_props: Props) {
   }, []);
   useEffect(load, [load]);
 
+  if (!authorized) return null;
   if (loading) return <Loading label="Cargando tus puntos…" />;
   if (error || !info) return <ErrorView message={error ?? undefined} onRetry={load} />;
 

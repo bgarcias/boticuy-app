@@ -12,8 +12,9 @@ import type { Product, PointsInfo } from '../types';
 import { useCart } from '../store/cartStore';
 import { useAuth } from '../store/authStore';
 import { useToast } from '../store/toastStore';
-import { fetchProducts, fetchProduct } from '../api/products';
+import { fetchProducts } from '../api/products';
 import { fetchPoints } from '../api/points';
+import { revalidateCart } from '../utils/cartRevalidation';
 import { FreeShippingBar } from '../components/FreeShippingBar';
 import { HorizontalProducts } from '../components/HorizontalProducts';
 import { CouponField } from '../components/CouponField';
@@ -40,37 +41,16 @@ export function CartScreen({ navigation }: Props) {
   const [recommended, setRecommended] = useState<Product[]>([]);
   const [level, setLevel] = useState<PointsInfo['level'] | null>(null);
 
-  // Al abrir el carrito, revalida el stock real de cada producto contra lo
-  // guardado (que puede estar desactualizado) — mismo patrón que "Volver a
-  // pedir" en OrderDetailScreen: ajusta cantidad si el stock bajó, quita el
-  // ítem si ya no está disponible, y avisa con un solo toast al final.
+  // Al abrir el carrito, revalida stock Y precio real de cada producto contra
+  // lo guardado (que puede estar desactualizado — ver A7) — mismo patrón que
+  // "Volver a pedir" en OrderDetailScreen: ajusta cantidad si el stock bajó,
+  // quita el ítem si ya no está disponible, actualiza el precio si cambió, y
+  // avisa con un solo toast al final. Lógica compartida con CheckoutScreen
+  // (montaje y pre-submit) en src/utils/cartRevalidation.ts.
   const checkStock = useCallback(() => {
     let cancelled = false;
     (async () => {
-      const current = useCart.getState().items;
-      if (current.length === 0) return;
-      const issues: string[] = [];
-      for (const item of current) {
-        try {
-          const p = await fetchProduct(item.productId);
-          if (cancelled) return;
-          if (!p.is_in_stock) {
-            useCart.getState().remove(item.productId);
-            issues.push(`"${item.name}" ya no está disponible.`);
-            continue;
-          }
-          const available = p.low_stock_remaining;
-          const qty = available != null ? Math.min(item.quantity, available) : item.quantity;
-          if (qty < item.quantity) {
-            useCart.getState().setQty(item.productId, qty);
-            issues.push(`Se ajustó la cantidad de "${item.name}" a ${qty} (stock limitado).`);
-          }
-        } catch {
-          if (cancelled) return;
-          useCart.getState().remove(item.productId);
-          issues.push(`"${item.name}" ya no está disponible.`);
-        }
-      }
+      const { issues } = await revalidateCart(() => cancelled);
       if (!cancelled && issues.length > 0) {
         showToast(issues.join('\n'), { variant: 'warning', duration: 5000 });
       }

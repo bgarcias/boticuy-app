@@ -9,11 +9,13 @@ import type { SavedAddress } from '../types';
 import { fetchAddresses, deleteAddress } from '../api/addresses';
 import { Loading, ErrorView } from '../components/Feedback';
 import { useToast } from '../store/toastStore';
+import { useRequireAuth } from '../hooks/useRequireAuth';
 import { colors, spacing, radius, shadow } from '../theme';
 
 type Props = NativeStackScreenProps<RootStackParamList, 'Addresses'>;
 
 export function AddressesScreen({ navigation }: Props) {
+  const authorized = useRequireAuth();
   const [addresses, setAddresses] = useState<SavedAddress[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -47,6 +49,7 @@ export function AddressesScreen({ navigation }: Props) {
     ]);
   };
 
+  if (!authorized) return null;
   if (loading) return <Loading label="Cargando direcciones…" />;
   if (error) return <ErrorView message={error} onRetry={load} />;
   if (addresses.length === 0)

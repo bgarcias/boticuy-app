@@ -15,7 +15,22 @@ import { colors, spacing, radius } from '../theme';
 type Props = NativeStackScreenProps<RootStackParamList, 'OrderConfirmation'>;
 
 export function OrderConfirmationScreen({ route, navigation }: Props) {
-  const { nombre, email, distrito, metodoPago, envio, total, coupon, discount, orderNumber } = route.params;
+  const {
+    nombre,
+    email,
+    distrito,
+    metodoPago,
+    envio,
+    total,
+    coupon,
+    discount,
+    pointsRequested,
+    pointsRedeemed,
+    pointsDiscount,
+    pointsAdjusted,
+    orderNumber,
+    shippingUnavailable,
+  } = route.params;
   const insets = useSafeAreaInsets();
   const clear = useCart((s) => s.clear);
   // Texto fijo por método de pago — ya no depende del horario de atención
@@ -69,8 +84,16 @@ export function OrderConfirmationScreen({ route, navigation }: Props) {
           {!!coupon && !!discount && discount > 0 && (
             <Row label={`Cupón ${coupon}`} value={`− ${formatSoles(discount)}`} />
           )}
-          <Row label="Envío" value={envio > 0 ? formatSoles(envio) : 'Gratis'} />
+          {!!pointsDiscount && pointsDiscount > 0 && (
+            <Row label={`Puntos canjeados (${pointsRedeemed})`} value={`− ${formatSoles(pointsDiscount)}`} />
+          )}
+          <Row label="Envío" value={shippingUnavailable ? 'No disponible' : envio > 0 ? formatSoles(envio) : 'Gratis'} />
           <Row label="Total" value={formatSoles(total)} bold />
+          {!!pointsAdjusted && (
+            <Text style={styles.adjustedHint}>
+              Usamos {pointsRedeemed} de tus {pointsRequested} puntos solicitados — el precio cambió antes de confirmar.
+            </Text>
+          )}
           <View style={styles.divider} />
           {metodoPago === 'tarjeta' ? (
             <View style={styles.pago}>
@@ -170,6 +193,7 @@ const styles = StyleSheet.create({
   rowLabel: { fontSize: 14, color: colors.textMuted },
   rowValue: { fontSize: 15, fontWeight: '700', color: colors.text },
   divider: { height: 1, backgroundColor: colors.border, marginVertical: spacing.sm },
+  adjustedHint: { fontSize: 12, color: colors.textMuted, marginTop: -4 },
   pago: { gap: 4 },
   pagoTitle: { fontSize: 15, fontWeight: '700', color: colors.primaryDark },
   pagoText: { fontSize: 13, color: colors.textMuted, lineHeight: 19 },

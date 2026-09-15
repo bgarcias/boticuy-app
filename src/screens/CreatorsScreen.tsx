@@ -23,6 +23,7 @@ export function CreatorsScreen({ navigation }: Props) {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const setCoupon = useCart((s) => s.setCoupon);
+  const items = useCart((s) => s.items);
   const subtotal = useCart((s) => s.subtotal());
   const showToast = useToast((s) => s.show);
 
@@ -48,7 +49,8 @@ export function CreatorsScreen({ navigation }: Props) {
     // listados de creador no traen el monto mínimo real del cupón en WooCommerce,
     // así que aplicarlo a ciegas con minimum_amount:0 podía saltarse esa regla.
     try {
-      const res = await validateCoupon(c.code);
+      const cartItems = items.map((i) => ({ id: i.productId, qty: i.quantity }));
+      const res = await validateCoupon(c.code, cartItems);
       if (!res.valid || !res.coupon) {
         showToast(res.reason ?? 'Cupón no válido', { variant: 'warning' });
         return;

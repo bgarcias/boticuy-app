@@ -11,6 +11,7 @@ import { colors, radius, spacing } from '../theme';
 export function CouponField() {
   const coupon = useCart((s) => s.coupon);
   const setCoupon = useCart((s) => s.setCoupon);
+  const items = useCart((s) => s.items);
   const subtotal = useCart((s) => s.subtotal());
   const discount = useCart((s) => s.discount());
   const showToast = useToast((s) => s.show);
@@ -25,7 +26,8 @@ export function CouponField() {
     setLoading(true);
     setError(null);
     try {
-      const res = await validateCoupon(value);
+      const cartItems = items.map((i) => ({ id: i.productId, qty: i.quantity }));
+      const res = await validateCoupon(value, cartItems);
       if (!res.valid || !res.coupon) {
         setError(res.reason ?? 'Cupón no válido');
         return;
@@ -46,6 +48,13 @@ export function CouponField() {
 
   if (coupon) {
     const belowMinimum = !!coupon.minimum_amount && subtotal < coupon.minimum_amount;
+    // discount_type distinto de percent/fixed_cart (ej. fixed_product): cartStore.discount()
+    // no sabe calcularlo y devuelve 0 a propósito, para no inventar un monto (ver M10 en
+    // boticuy-hallazgos-completo.md) — mostrar "−S/0.00" daría a entender que el cupón no
+    // hace nada, cuando en realidad create_order() sí lo aplica bien (WooCommerce nativo).
+    // Sin cupones fixed_product reales hoy (confirmado con Bran) — esto cubre el caso a
+    // futuro sin invertir en replicar el cálculo completo en el cliente.
+    const previewUnsupported = !belowMinimum && discount === 0 && coupon.discount_type !== 'percent' && coupon.discount_type !== 'fixed_cart';
     return (
       <View style={[styles.appliedWrap, belowMinimum && styles.appliedWrapWarn]}>
         <View style={styles.applied}>
@@ -54,6 +63,10 @@ export function CouponField() {
             <Text style={styles.appliedText}>
               Cupón <Text style={{ fontWeight: '800' }}>{coupon.code}</Text> — agrega{' '}
               {formatSoles(coupon.minimum_amount - subtotal)} más para usarlo
+            </Text>
+          ) : previewUnsupported ? (
+            <Text style={styles.appliedText}>
+              Cupón <Text style={{ fontWeight: '800' }}>{coupon.code}</Text> válido — el descuento se verá al confirmar tu pedido
             </Text>
           ) : (
             <Text style={styles.appliedText}>

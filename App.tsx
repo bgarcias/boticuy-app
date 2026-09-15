@@ -7,12 +7,16 @@ import { RootNavigator } from './src/navigation';
 import { Toast } from './src/components/Toast';
 import { OfflineBanner } from './src/components/OfflineBanner';
 import { useAuth } from './src/store/authStore';
+import { useShippingConfig } from './src/store/shippingConfigStore';
 import { initAnalytics } from './src/analytics/posthog';
 
 export default function App() {
   useEffect(() => {
     useAuth.getState().hydrate();
     initAnalytics();
+    // Umbral Plata/Oro (ver M5): se refresca en segundo plano, sin bloquear el
+    // primer render — mientras tanto se usa el valor cacheado o el default de build.
+    useShippingConfig.getState().refresh();
   }, []);
 
   return (

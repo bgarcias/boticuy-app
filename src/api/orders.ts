@@ -34,6 +34,17 @@ export interface CreateOrderResult {
   total?: number;
   /** Requerido para /payment/formtoken y /payment/validate en pedidos de invitado (ver payment.ts). */
   checkout_token?: string;
+  /** Presentes solo si se pidió algún canje de puntos (ver A7 en boticuy-hallazgos-completo.md). */
+  points_requested?: number;
+  points_redeemed?: number;
+  points_discount?: number;
+  /** true si el servidor tuvo que recortar el canje pedido (precio cambió antes de confirmar). */
+  points_redeemed_adjusted?: boolean;
+  /** Presente solo si se aplicó un cupón — monto real calculado por WooCommerce
+   *  nativo (`apply_coupon()`), no por `cartStore.discount()` (ver M10 en
+   *  boticuy-hallazgos-completo.md: la app no sabe previsualizar todos los
+   *  tipos de descuento, pero el servidor sí los calcula todos). */
+  coupon_discount?: number;
 }
 
 const ORDERS_ENABLED = Constants.expoConfig?.extra?.ordersEnabled === true;

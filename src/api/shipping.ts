@@ -8,3 +8,10 @@ export async function fetchShipping(idUbigeo: string, subtotal: number): Promise
   });
   return res.data;
 }
+
+/** Umbral reducido Plata/Oro, fuente única compartida con el plugin (ver M5 en
+ *  boticuy-hallazgos-completo.md) — consumido por useShippingConfig, no directo. */
+export async function fetchShippingConfig(): Promise<{ envio_gratis_nivel: number }> {
+  const res = await bffClient.get<{ envio_gratis_nivel: number }>('/shipping/config');
+  return res.data;
+}

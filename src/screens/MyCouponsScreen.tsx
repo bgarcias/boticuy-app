@@ -6,6 +6,7 @@ import type { NativeStackScreenProps } from '@react-navigation/native-stack';
 import type { RootStackParamList } from '../navigation/types';
 import type { Creator } from '../types';
 import { fetchMisCupones, fetchCuponesOro, validateCoupon } from '../api/coupons';
+import { useRequireAuth } from '../hooks/useRequireAuth';
 import { useCart } from '../store/cartStore';
 import { useToast } from '../store/toastStore';
 import { analytics } from '../analytics';
@@ -21,11 +22,13 @@ type Props = NativeStackScreenProps<RootStackParamList, 'MyCoupons'>;
  * gate de acceso ya resuelto en el servidor). Sin historial de uso.
  */
 export function MyCouponsScreen({ navigation }: Props) {
+  const authorized = useRequireAuth();
   const [disponibles, setDisponibles] = useState<Creator[]>([]);
   const [oro, setOro] = useState<Creator[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const setCoupon = useCart((s) => s.setCoupon);
+  const items = useCart((s) => s.items);
   const subtotal = useCart((s) => s.subtotal());
   const showToast = useToast((s) => s.show);
 
@@ -48,7 +51,8 @@ export function MyCouponsScreen({ navigation }: Props) {
     // listados de creador no traen el monto mínimo real del cupón en WooCommerce,
     // así que aplicarlo a ciegas con minimum_amount:0 podía saltarse esa regla.
     try {
-      const res = await validateCoupon(c.code);
+      const cartItems = items.map((i) => ({ id: i.productId, qty: i.quantity }));
+      const res = await validateCoupon(c.code, cartItems);
       if (!res.valid || !res.coupon) {
         showToast(res.reason ?? 'Cupón no válido', { variant: 'warning' });
         return;
@@ -66,6 +70,7 @@ export function MyCouponsScreen({ navigation }: Props) {
     }
   };
 
+  if (!authorized) return null;
   if (loading) return <Loading label="Cargando cupones…" />;
   if (error) return <ErrorView message={error} onRetry={load} />;
   if (disponibles.length === 0 && oro.length === 0) return <Empty message="No hay cupones activos por ahora." />;

@@ -12,12 +12,19 @@ const WEEKDAYS = ['domingo', 'lunes', 'martes', 'miércoles', 'jueves', 'viernes
 // Feriados peruanos de fecha fija (MM-DD, año-agnóstico). Jueves y Viernes
 // Santo son móviles (dependen de la Pascua) y se calculan aparte, ver
 // `isSemanaSantaFeriado`.
+// Lista revisada contra el calendario oficial vigente de feriados nacionales
+// no laborables de Perú (2026-09-08, ver B4 en boticuy-hallazgos-completo.md)
+// — faltaban exactamente estos dos, el resto ya coincidía. El 23 de julio
+// ("Día de la Fuerza Aérea del Perú") NO se agrega a propósito: es una fecha
+// conmemorativa institucional, no un feriado nacional no laborable general.
 const FERIADOS = new Set([
   '01-01', // Año Nuevo
   '05-01', // Día del Trabajo
+  '06-07', // Batalla de Arica y Día de la Bandera
   '06-29', // San Pedro y San Pablo
   '07-28', // Fiestas Patrias
   '07-29', // Fiestas Patrias
+  '08-06', // Batalla de Junín (Ley N.° 31989)
   '08-30', // Santa Rosa de Lima
   '10-08', // Combate de Angamos
   '11-01', // Todos los Santos

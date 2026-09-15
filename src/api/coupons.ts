@@ -37,9 +37,25 @@ interface ValidateResult {
   coupon?: AppliedCoupon;
 }
 
-/** Valida un cupón por código. */
-export async function validateCoupon(code: string): Promise<ValidateResult> {
-  const res = await bffClient.get<any>('/coupon', { params: { code: code.trim() } });
+/** Mismo shape que `items` en `POST /order` (`src/api/orders.ts`). */
+export interface CouponCartItem {
+  id: number;
+  qty: number;
+}
+
+/**
+ * Valida un cupón por código. `items` (opcional, ítems del carrito) hace que
+ * el servidor también valide restricción de producto/categoría y exclusión de
+ * artículos en oferta (antes solo se descubría al confirmar el pedido, ver A2
+ * en boticuy-hallazgos-completo.md) — sin `items`, el servidor solo revisa
+ * existencia/vencimiento/Oro/límite de usos.
+ */
+export async function validateCoupon(code: string, items?: CouponCartItem[]): Promise<ValidateResult> {
+  const params: Record<string, string> = { code: code.trim() };
+  if (items && items.length > 0) {
+    params.items = JSON.stringify(items);
+  }
+  const res = await bffClient.get<any>('/coupon', { params });
   if (!res.data?.valid) {
     return { valid: false, reason: res.data?.reason ?? 'Cupón no válido' };
   }

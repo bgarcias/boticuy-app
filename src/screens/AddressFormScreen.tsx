@@ -9,11 +9,14 @@ import { addAddress, updateAddress } from '../api/addresses';
 import { TextField } from '../components/TextField';
 import { SelectField } from '../components/SelectField';
 import { isValidPhone, isValidDNI, stripInnerSpaces } from '../utils/validation';
+import { buildAddressPayload } from '../utils/addressPayload';
+import { useRequireAuth } from '../hooks/useRequireAuth';
 import { colors, spacing, radius } from '../theme';
 
 type Props = NativeStackScreenProps<RootStackParamList, 'AddressForm'>;
 
 export function AddressFormScreen({ route, navigation }: Props) {
+  const authorized = useRequireAuth();
   const address = route.params?.address;
   const isEditing = !!address;
 
@@ -99,29 +102,40 @@ export function AddressFormScreen({ route, navigation }: Props) {
     setSubmitting(true);
     setErrors({});
     try {
-      const payload = {
-        telefono: telefono.trim(),
-        numDoc: stripInnerSpaces(numDoc.trim()),
-        direccion: direccion.trim(),
-        numero: numero.trim(),
-        interior: interior.trim(),
-        referencia: referencia.trim(),
-        departamento: { codigo: departamento!.codigo, nombre: departamento!.nombre },
-        provincia: { codigo: provincia!.codigo, nombre: provincia!.nombre },
-        distrito: { codigo: distrito!.codigo, nombre: distrito!.nombre, idUbigeo: distrito!.idUbigeo ?? '' },
-      };
+      // Mismo builder que CheckoutScreen (ver A3 en boticuy-hallazgos-completo.md)
+      // — un solo lugar que sabe qué payload espera el servidor, para que las
+      // dos pantallas no vuelvan a desalinearse.
+      const payload = buildAddressPayload({
+        telefono,
+        numDoc,
+        direccion,
+        numero,
+        interior,
+        referencia,
+        departamento: departamento!,
+        provincia: provincia!,
+        distrito: distrito!,
+      });
       if (isEditing) {
         await updateAddress(address!.id, payload);
       } else {
         await addAddress(payload);
       }
       navigation.goBack();
-    } catch {
-      setErrors({ submit: 'No pudimos guardar la dirección. Intenta de nuevo.' });
+    } catch (err) {
+      // addAddress()/updateAddress() lanzan con el motivo real del servidor
+      // (ver B9 en boticuy-hallazgos-completo.md) — antes un 4xx (ej. tope de
+      // 10 direcciones) resolvía en silencio y esta pantalla volvía atrás
+      // como si se hubiera guardado. Fallback genérico solo si por algún
+      // motivo no vino mensaje (error de red real, no una respuesta 4xx).
+      const reason = err instanceof Error && err.message ? err.message : 'No pudimos guardar la dirección. Intenta de nuevo.';
+      setErrors({ submit: reason });
     } finally {
       setSubmitting(false);
     }
   };
+
+  if (!authorized) return null;
 
   return (
     <KeyboardAvoidingView style={styles.container} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>

@@ -19,8 +19,16 @@ export type ConfirmParams = {
   envio: number;
   total: number;
   coupon?: string;
+  /** Solo el descuento del cupón (ver M1 en boticuy-hallazgos-completo.md — antes venía mezclado con el de puntos). */
   discount?: number;
+  /** Del servidor (ord.points_*), nunca del estado local del checkout — si A7 recortó el canje, el local ya no coincide. */
+  pointsRequested?: number;
+  pointsRedeemed?: number;
+  pointsDiscount?: number;
+  pointsAdjusted?: boolean;
   orderNumber?: string;
+  /** true si la cotización de envío nunca se resolvió (ver M2) — evita mostrar "Gratis" cuando en realidad fue un error. */
+  shippingUnavailable?: boolean;
 };
 
 export type RootStackParamList = {

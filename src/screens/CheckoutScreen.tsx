@@ -6,12 +6,15 @@ import * as SecureStore from 'expo-secure-store';
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
 
 import type { RootStackParamList } from '../navigation/types';
-import type { UbigeoTerm, ShippingQuote, SavedAddress, PaymentMethod } from '../types';
+import type { UbigeoTerm, ShippingQuote, SavedAddress, PaymentMethod, CartItem } from '../types';
 import { useCart } from '../store/cartStore';
 import { useAuth } from '../store/authStore';
+import { useToast } from '../store/toastStore';
+import { revalidateCart } from '../utils/cartRevalidation';
 import { fetchDepartamentos, fetchProvincias, fetchDistritos } from '../api/ubigeo';
 import { fetchShipping } from '../api/shipping';
 import { fetchAddresses, addAddress } from '../api/addresses';
+import { buildAddressPayload } from '../utils/addressPayload';
 import { TextField } from '../components/TextField';
 import { SelectField } from '../components/SelectField';
 import { CouponField } from '../components/CouponField';
@@ -29,9 +32,40 @@ type Props = NativeStackScreenProps<RootStackParamList, 'Checkout'>;
 
 const PROFILE_KEY = 'boticuy-checkout-profile';
 
-/** No necesita ser criptográficamente segura, solo única por intento de checkout. */
-function generateIdempotencyKey(): string {
+/**
+ * No necesita ser criptográficamente segura, solo única por instancia de la
+ * pantalla de Checkout — es el nonce de sesión que alimenta buildIdempotencyKey()
+ * de abajo (ver M13 en boticuy-hallazgos-completo.md), ya no la key final.
+ */
+function generateSessionNonce(): string {
   return `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 10)}`;
+}
+
+/** Hash chico y determinístico (tipo String.hashCode de Java), sin librería
+ *  externa — no necesita propiedades criptográficas, solo ser estable: mismo
+ *  contenido siempre da el mismo hash. */
+function simpleHash(str: string): string {
+  let h = 0;
+  for (let i = 0; i < str.length; i++) h = (Math.imul(31, h) + str.charCodeAt(i)) | 0;
+  return (h >>> 0).toString(36);
+}
+
+/**
+ * La key de idempotencia se deriva del contenido real del pedido (ítems, cupón,
+ * canje de puntos), no de un valor aleatorio fijo al montar — antes, si el
+ * usuario reintentaba después de cambiar el cupón o el canje de puntos, el
+ * servidor devolvía el pedido viejo sin mirar el payload nuevo (ver M13). Con
+ * la key derivada del contenido, un cambio real produce una key distinta sola,
+ * sin que nadie tenga que acordarse de regenerarla. El nonce de sesión evita
+ * que dos invitados con carritos idénticos colisionen en la misma key.
+ */
+function buildIdempotencyKey(nonce: string, items: CartItem[], couponCode: string | undefined, pointsRedeem: number): string {
+  const itemsKey = [...items]
+    .sort((a, b) => a.productId - b.productId)
+    .map((i) => `${i.productId}:${i.quantity}`)
+    .join(',');
+  const content = `${itemsKey}|${(couponCode ?? '').toLowerCase()}|${pointsRedeem || 0}`;
+  return `${nonce}-${simpleHash(content)}`;
 }
 
 /**
@@ -47,15 +81,18 @@ export function CheckoutScreen({ navigation }: Props) {
   const discount = useCart((s) => s.discount());
   const coupon = useCart((s) => s.coupon);
   const user = useAuth((s) => s.user);
+  const showToast = useToast((s) => s.show);
 
   // Direcciones guardadas (solo logueado)
   const [savedAddresses, setSavedAddresses] = useState<SavedAddress[]>([]);
   const [saveAddr, setSaveAddr] = useState(false); // opt-in (no marcado por defecto)
 
-  // Idempotencia: una sola key por intento de checkout — si el usuario reintenta
-  // (doble tap, timeout de red) se reenvía la MISMA key, así el plugin devuelve
-  // el pedido ya creado en vez de duplicarlo.
-  const [idempotencyKey] = useState(generateIdempotencyKey);
+  // Idempotencia: la key se deriva del contenido (ver buildIdempotencyKey) a
+  // partir de este nonce, fijo por instancia de la pantalla. Un reintento con
+  // el mismo contenido (doble tap, timeout de red) reenvía la misma key, así
+  // el plugin devuelve el pedido ya creado en vez de duplicarlo — pero si el
+  // contenido cambió (cupón, puntos, carrito), la key sale distinta sola.
+  const [sessionNonce] = useState(generateSessionNonce);
 
   // Form
   const [nombre, setNombre] = useState('');
@@ -96,8 +133,40 @@ export function CheckoutScreen({ navigation }: Props) {
   const envio = shipping ? shipping.cost : 0;
   const finalTotal = Math.max(0, subtotal - discount - pointsDiscount + envio);
 
+  // Cupón de un tipo que cartStore.discount() no calcula (ej. fixed_product) —
+  // mismo criterio que CouponField.tsx (ver M10 en boticuy-hallazgos-completo.md):
+  // discount da 0 sin que el cupón realmente no haga nada, así que la fila de
+  // "Descuento" no puede mostrar "−S/0.00" (mentira) ni ocultarse sin más (no
+  // avisa que sigue aplicado). Se distingue del caso "no llega al monto mínimo"
+  // (ese sí debe mostrarse en S/0/oculto — CouponField ya lo avisa arriba con su
+  // propio mensaje) para no confundir "todavía no aplica" con "ya aplica, el
+  // monto se confirma al pagar".
+  const belowCouponMinimum = !!coupon?.minimum_amount && subtotal < coupon.minimum_amount;
+  const discountPreviewUnsupported =
+    !!coupon && discount === 0 && !belowCouponMinimum && coupon.discount_type !== 'percent' && coupon.discount_type !== 'fixed_cart';
+
   useEffect(() => {
     fetchDepartamentos().then(setDeps).catch(() => {});
+  }, []);
+
+  // Revalidación al entrar al Checkout (capa 2 de A7, ver
+  // boticuy-hallazgos-completo.md): actualiza stock y precio real de cada
+  // ítem ANTES de que el usuario decida cuánto canjear — así el subtotal y el
+  // tope de 30% que ve en PointsRedeemField ya reflejan el precio vigente, no
+  // el que tenía el carrito al agregarlo (que puede llevar días desactualizado).
+  // Una sola vez al montar (Checkout es pantalla de stack, no de tab — a
+  // diferencia de CartScreen no hace falta useFocusEffect).
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      const { issues } = await revalidateCart(() => cancelled);
+      if (!cancelled && issues.length > 0) {
+        showToast(issues.join('\n'), { variant: 'warning', duration: 5000 });
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
   }, []);
 
   // Recordar mis datos: precargar lo guardado en este teléfono (opt-in).
@@ -224,6 +293,27 @@ export function CheckoutScreen({ navigation }: Props) {
 
   const onSubmit = async () => {
     if (!validate()) return;
+
+    // Revalidación pre-submit (capa 3 de A7): último chequeo de stock/precio
+    // justo antes de crear el pedido — cierra la ventana que la revalidación
+    // de montaje (arriba) deja abierta mientras el usuario llena el
+    // formulario. Si encuentra un cambio real, se corta acá: el usuario ve
+    // los números ya actualizados en pantalla (subtotal, tope de puntos,
+    // total) y tiene que volver a tocar "Confirmar pedido" contra datos
+    // frescos, en vez de que se le cobre o canjee algo distinto de lo que
+    // vio. Si la revalidación en sí falla (red), NO bloquea — se sigue con lo
+    // que ya había en el store; para ese caso queda el recorte del servidor
+    // como red de seguridad final (ver create_order(), points_redeemed_adjusted).
+    try {
+      const { issues } = await revalidateCart();
+      if (issues.length > 0) {
+        showToast(issues.join('\n'), { variant: 'warning', duration: 5000 });
+        return;
+      }
+    } catch {
+      /* no bloquea el submit */
+    }
+
     // Recordar mis datos: guardar/olvidar localmente en este teléfono (opt-in).
     try {
       if (saveAddr) {
@@ -249,17 +339,30 @@ export function CheckoutScreen({ navigation }: Props) {
     } catch {
       /* noop */
     }
-    // Además, guardar la dirección en la cuenta (si hay sesión).
+    // Además, guardar la dirección en la cuenta (si hay sesión). Fire-and-forget
+    // a propósito — no debe bloquear ni demorar el pago. Si falla, se avisa con
+    // un toast en vez de tragarse el error en silencio (ver A3): el toast es
+    // global (montado en App.tsx), así que se ve igual aunque ya se haya
+    // navegado a la pantalla de pago/confirmación para cuando la promesa resuelve.
+    // `addAddress()` lanza con el motivo real ante cualquier fallo (ver B9 en
+    // boticuy-hallazgos-completo.md) — basta con el `.catch()`.
     if (user && saveAddr && departamento && provincia && distrito) {
-      addAddress({
-        direccion: direccion.trim(),
-        numero: numero.trim(),
-        interior: interior.trim(),
-        referencia: referencia.trim(),
-        departamento: { codigo: departamento.codigo, nombre: departamento.nombre },
-        provincia: { codigo: provincia.codigo, nombre: provincia.nombre },
-        distrito: { codigo: distrito.codigo, nombre: distrito.nombre, idUbigeo: distrito.idUbigeo ?? '' },
-      }).catch(() => {});
+      addAddress(
+        buildAddressPayload({
+          nombre: nombre.trim(),
+          telefono: telefono.trim(),
+          numDoc: numDoc.trim(),
+          direccion: direccion.trim(),
+          numero: numero.trim(),
+          interior: interior.trim(),
+          referencia: referencia.trim(),
+          departamento,
+          provincia,
+          distrito,
+        })
+      ).catch(() =>
+        showToast('No pudimos guardar tu dirección en tu cuenta, pero tu pedido sí se procesó.', { variant: 'warning' })
+      );
     }
 
     analytics.track(EV.CHECKOUT_SUBMITTED, {
@@ -280,8 +383,30 @@ export function CheckoutScreen({ navigation }: Props) {
       envio,
       total: finalTotal,
       coupon: coupon?.code,
-      discount: discount + pointsDiscount,
+      // Estimado del cliente (cartStore.discount()) — solo como fallback si el
+      // servidor no llega a responder con coupon_discount (ver couponParams
+      // abajo). No calcula todos los tipos de descuento (ver M10 en
+      // boticuy-hallazgos-completo.md), así que nunca es la fuente final.
+      discount,
+      // La cotización de envío nunca se resolvió (a diferencia de costar S/0
+      // de verdad) — ver M2.
+      shippingUnavailable: shipping === null,
     };
+    // Del servidor, no del estado local: si A7 recortó el canje pedido, lo que
+    // el cliente calculó (pointsToRedeem/pointsDiscount) ya no es lo que
+    // realmente se canjeó.
+    const pointsParams = (ord: { points_requested?: number; points_redeemed?: number; points_discount?: number; points_redeemed_adjusted?: boolean }) => ({
+      pointsRequested: ord.points_requested,
+      pointsRedeemed: ord.points_redeemed,
+      pointsDiscount: ord.points_discount,
+      pointsAdjusted: ord.points_redeemed_adjusted,
+    });
+    // Del servidor, no del estado local (ver M10): create_order() ya calculó el
+    // descuento real del cupón vía apply_coupon() nativo de WooCommerce, que sí
+    // sabe calcular cualquier discount_type — reemplaza el estimado de
+    // cartStore.discount() en `baseParams` cuando está presente.
+    const couponParams = (ord: { coupon_discount?: number }) =>
+      ord.coupon_discount !== undefined ? { discount: ord.coupon_discount } : {};
     const orderPayload = {
       items: items.map((i) => ({ id: i.productId, qty: i.quantity })),
       customer: { nombre: nombre.trim(), email: email.trim(), telefono: telefono.trim(), tipoDoc: 'DNI', numDoc: stripInnerSpaces(numDoc.trim()) },
@@ -300,7 +425,10 @@ export function CheckoutScreen({ navigation }: Props) {
       payment: metodoPago!,
       coupon: coupon?.code,
       points_redeem: pointsToRedeem || undefined,
-      idempotency_key: idempotencyKey,
+      // Calculada recién acá, con los valores actuales — si el cupón o el
+      // canje de puntos cambiaron desde un intento anterior en esta misma
+      // pantalla, la key sale distinta sola (ver M13).
+      idempotency_key: buildIdempotencyKey(sessionNonce, items, coupon?.code, pointsToRedeem),
     };
 
     // Pago con tarjeta: primero se crea el pedido (total calculado en el servidor),
@@ -316,7 +444,7 @@ export function CheckoutScreen({ navigation }: Props) {
         }
         if (!ord.order_id) {
           // Vista previa (ordersEnabled=false): no hay pedido real, no se llama a Izipay.
-          navigation.navigate('OrderConfirmation', { ...baseParams, total: ord.total ?? finalTotal, orderNumber: ord.number });
+          navigation.navigate('OrderConfirmation', { ...baseParams, total: ord.total ?? finalTotal, orderNumber: ord.number, ...pointsParams(ord), ...couponParams(ord) });
           return;
         }
         const ft = await getFormToken(ord.order_id, ord.checkout_token);
@@ -329,7 +457,7 @@ export function CheckoutScreen({ navigation }: Props) {
           formToken: ft.formToken,
           publicKey: ft.publicKey,
           checkoutToken: ord.checkout_token,
-          confirm: { ...baseParams, total: ord.total ?? finalTotal, orderNumber: ord.number },
+          confirm: { ...baseParams, total: ord.total ?? finalTotal, orderNumber: ord.number, ...pointsParams(ord), ...couponParams(ord) },
         });
       } catch {
         setErrors({ submit: 'Error al iniciar el pago. Intenta de nuevo.' });
@@ -349,7 +477,7 @@ export function CheckoutScreen({ navigation }: Props) {
         setErrors({ submit: res.reason ?? 'No pudimos crear el pedido. Intenta de nuevo.' });
         return;
       }
-      navigation.navigate('OrderConfirmation', { ...baseParams, total: res.total ?? finalTotal, orderNumber: res.number });
+      navigation.navigate('OrderConfirmation', { ...baseParams, total: res.total ?? finalTotal, orderNumber: res.number, ...pointsParams(res), ...couponParams(res) });
     } catch {
       setErrors({ submit: 'Error de conexión al crear el pedido.' });
     } finally {
@@ -461,8 +589,12 @@ export function CheckoutScreen({ navigation }: Props) {
         {/* Resumen */}
         <View style={styles.summary}>
           <Row label="Subtotal" value={formatSoles(subtotal)} />
-          {discount > 0 && (
-            <Row label={`Descuento${coupon ? ` (${coupon.code})` : ''}`} value={`− ${formatSoles(discount)}`} highlight />
+          {discountPreviewUnsupported ? (
+            <Row label={`Descuento (${coupon!.code})`} value="Se verá al confirmar" highlight />
+          ) : (
+            discount > 0 && (
+              <Row label={`Descuento${coupon ? ` (${coupon.code})` : ''}`} value={`− ${formatSoles(discount)}`} highlight />
+            )
           )}
           {pointsDiscount > 0 && (
             <Row label={`Puntos canjeados (${pointsToRedeem})`} value={`− ${formatSoles(pointsDiscount)}`} highlight />

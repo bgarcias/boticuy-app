@@ -34,6 +34,20 @@ const NAMED_ENTITIES: Record<string, string> = {
 };
 
 /**
+ * `String.fromCodePoint()` lanza `RangeError` fuera de `0-0x10FFFF` (y también
+ * dentro del rango de surrogates aislado, `0xD800-0xDFFF`) — un valor así en
+ * una entidad numérica no debe tumbar el render completo. Mismo criterio que
+ * ya usa el propio decodificador para una entidad *nombrada* desconocida:
+ * dejar el texto de la entidad tal cual vino, no inventar un placeholder.
+ */
+function safeFromCodePoint(codePoint: number, original: string): string {
+  if (codePoint < 0 || codePoint > 0x10ffff || (codePoint >= 0xd800 && codePoint <= 0xdfff)) {
+    return original;
+  }
+  return String.fromCodePoint(codePoint);
+}
+
+/**
  * Decodifica entidades HTML de textos que vienen de WordPress/WooCommerce
  * (nombres de producto, categorías, marcas, reseñas, etc.). A diferencia de
  * una tabla fija, las entidades numéricas (`&#8211;`, `&#8217;`...) se
@@ -42,8 +56,8 @@ const NAMED_ENTITIES: Record<string, string> = {
 export function decodeHtmlEntities(text: string): string {
   if (!text) return '';
   return text
-    .replace(/&#x([0-9a-fA-F]+);/g, (_, hex) => String.fromCodePoint(parseInt(hex, 16)))
-    .replace(/&#(\d+);/g, (_, dec) => String.fromCodePoint(parseInt(dec, 10)))
+    .replace(/&#x([0-9a-fA-F]+);/g, (entity, hex) => safeFromCodePoint(parseInt(hex, 16), entity))
+    .replace(/&#(\d+);/g, (entity, dec) => safeFromCodePoint(parseInt(dec, 10), entity))
     .replace(/&[a-zA-Z]+;/g, (entity) => NAMED_ENTITIES[entity] ?? entity);
 }
 

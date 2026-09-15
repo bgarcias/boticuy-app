@@ -8,11 +8,6 @@ interface AuthResult {
   user?: AuthUser;
 }
 
-interface MeResult {
-  ok: boolean;
-  user?: AuthUser;
-}
-
 export async function registerUser(email: string, password: string, nombre: string): Promise<AuthResult> {
   const res = await bffClient.post<AuthResult>('/auth/register', { email, password, nombre });
   return res.data;
@@ -23,12 +18,6 @@ export async function loginUser(email: string, password: string): Promise<AuthRe
   return res.data;
 }
 
-/** Valida la sesión actual (token vía interceptor), sin renovarlo. */
-export async function me(): Promise<MeResult> {
-  const res = await bffClient.get<MeResult>('/auth/me');
-  return res.data;
-}
-
 /**
  * Renueva el token actual (sesión deslizante): revalida el Bearer token vigente
  * (vía interceptor, sin body) y, si es válido, el plugin reemite uno nuevo con
@@ -36,5 +25,18 @@ export async function me(): Promise<MeResult> {
  */
 export async function refreshSession(): Promise<AuthResult> {
   const res = await bffClient.post<AuthResult>('/auth/refresh');
+  return res.data;
+}
+
+/**
+ * Cierre de sesión real en servidor (ver B5 en boticuy-hallazgos-completo.md):
+ * invalida el Bearer token vigente (vía interceptor, sin body) y cualquier
+ * otro token más viejo de este usuario — no solo este dispositivo. Antes
+ * `authStore.ts::logout()` solo borraba el token local, sin avisarle nada al
+ * servidor. Se llama best-effort desde `logout()` — si falla, igual se cierra
+ * sesión localmente.
+ */
+export async function logoutSession(): Promise<{ ok: boolean }> {
+  const res = await bffClient.post<{ ok: boolean }>('/auth/logout');
   return res.data;
 }

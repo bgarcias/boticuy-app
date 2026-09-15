@@ -6,6 +6,7 @@ import type { NativeStackScreenProps } from '@react-navigation/native-stack';
 import type { RootStackParamList } from '../navigation/types';
 import type { Order } from '../types';
 import { fetchMyOrders } from '../api/orders';
+import { useRequireAuth } from '../hooks/useRequireAuth';
 import { Loading, ErrorView, Empty } from '../components/Feedback';
 import { formatSoles } from '../utils/format';
 import { getOrderStatusLabelShort } from '../utils/orderStatus';
@@ -14,6 +15,7 @@ import { colors, spacing, radius, shadow } from '../theme';
 type Props = NativeStackScreenProps<RootStackParamList, 'Orders'>;
 
 export function OrdersScreen({ navigation }: Props) {
+  const authorized = useRequireAuth();
   const [orders, setOrders] = useState<Order[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -28,6 +30,7 @@ export function OrdersScreen({ navigation }: Props) {
   }, []);
   useEffect(load, [load]);
 
+  if (!authorized) return null;
   if (loading) return <Loading label="Cargando tus pedidos…" />;
   if (error) return <ErrorView message={error} onRetry={load} />;
   if (orders.length === 0)

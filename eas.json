@@ -17,11 +17,21 @@
         "EXPO_PUBLIC_STORE_API_URL": "http://35.209.93.250/wp-json/wc/store/v1",
         "EXPO_PUBLIC_WP_API_URL": "http://35.209.93.250/wp-json/wp/v2",
         "EXPO_PUBLIC_BFF_URL": "http://35.209.93.250/wp-json/boticuy-app/v1",
-        "EXPO_PUBLIC_ORDERS_ENABLED": "true"
+        "EXPO_PUBLIC_ORDERS_ENABLED": "true",
+        "EXPO_PUBLIC_POSTHOG_KEY": "phc_xtJYcWtSZaFUGW7fHbCDpumWgxr2eUi5gRL2nFkomfHS",
+        "EXPO_PUBLIC_POSTHOG_HOST": "https://us.i.posthog.com"
       }
     },
     "production": {
-      "autoIncrement": true
+      "autoIncrement": true,
+      "env": {
+        "EXPO_PUBLIC_STORE_API_URL": "https://boticuy.com/wp-json/wc/store/v1",
+        "EXPO_PUBLIC_WP_API_URL": "https://boticuy.com/wp-json/wp/v2",
+        "EXPO_PUBLIC_BFF_URL": "https://boticuy.com/wp-json/boticuy-app/v1",
+        "EXPO_PUBLIC_ORDERS_ENABLED": "true",
+        "EXPO_PUBLIC_POSTHOG_KEY": "phc_xtJYcWtSZaFUGW7fHbCDpumWgxr2eUi5gRL2nFkomfHS",
+        "EXPO_PUBLIC_POSTHOG_HOST": "https://us.i.posthog.com"
+      }
     }
   },
   "submit": {

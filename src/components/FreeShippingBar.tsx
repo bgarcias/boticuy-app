@@ -5,8 +5,9 @@ import Constants from 'expo-constants';
 import type { PointsInfo } from '../types';
 import { colors, radius, spacing } from '../theme';
 import { formatSoles } from '../utils/format';
+import { useShippingConfig } from '../store/shippingConfigStore';
 
-const extra = (Constants.expoConfig?.extra ?? {}) as { envioGratisDesde?: number; envioGratisDesdeNivel?: number };
+const extra = (Constants.expoConfig?.extra ?? {}) as { envioGratisDesde?: number };
 
 interface Props {
   subtotal: number;
@@ -18,7 +19,8 @@ interface Props {
 
 /** Barra de progreso hacia el envío gratis (nudge de conversión). */
 export function FreeShippingBar({ subtotal, level }: Props) {
-  const meta = level === 'plata' || level === 'oro' ? extra.envioGratisDesdeNivel ?? 59 : extra.envioGratisDesde ?? 69;
+  const envioGratisDesdeNivel = useShippingConfig((s) => s.envioGratisDesdeNivel);
+  const meta = level === 'plata' || level === 'oro' ? envioGratisDesdeNivel : extra.envioGratisDesde ?? 69;
   const reached = subtotal >= meta;
   const pct = Math.max(0, Math.min(1, subtotal / meta));
   const falta = Math.max(0, meta - subtotal);

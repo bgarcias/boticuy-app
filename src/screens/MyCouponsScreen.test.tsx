@@ -4,8 +4,16 @@ import TestRenderer, { act } from 'react-test-renderer';
 import { MyCouponsScreen } from './MyCouponsScreen';
 import { useCart } from '../store/cartStore';
 import { useToast } from '../store/toastStore';
+import { useAuth } from '../store/authStore';
 import * as couponsApi from '../api/coupons';
 
+// MyCouponsScreen está protegida por A5 (useRequireAuth), que llama a
+// useNavigation() — sin NavigationContainer real en este test, se reemplaza
+// por un `replace` espiable (no se prueba la redirección acá, solo que no
+// explote al montar).
+jest.mock('@react-navigation/native', () => ({
+  useNavigation: () => ({ replace: jest.fn() }),
+}));
 jest.mock('../api/coupons');
 
 const mockedFetchMisCupones = couponsApi.fetchMisCupones as jest.Mock;
@@ -20,6 +28,8 @@ let renderer: TestRenderer.ReactTestRenderer | undefined;
 beforeEach(() => {
   useCart.setState({ items: [], coupon: null });
   useToast.setState({ message: null, seq: 0, variant: 'success', duration: 1800 });
+  // Protegida por A5 — sin sesión "lista", la pantalla no renderiza nada.
+  useAuth.setState({ user: { id: 1, email: 'test@boticuy.com', nombre: 'Test' }, tokenReady: true });
   jest.clearAllMocks();
 });
 
@@ -73,7 +83,7 @@ describe('MyCouponsScreen — "Usar" revalida contra /coupon en vez de aplicar a
 
     await renderAndPressUsar();
 
-    expect(mockedValidateCoupon).toHaveBeenCalledWith('CREA10');
+    expect(mockedValidateCoupon).toHaveBeenCalledWith('CREA10', [{ id: 1, qty: 1 }]);
     expect(useCart.getState().coupon).toBeNull(); // NO se aplicó a ciegas
     expect(useToast.getState().message).toMatch(/Compra mínima/);
     expect(navigation.navigate).not.toHaveBeenCalled();

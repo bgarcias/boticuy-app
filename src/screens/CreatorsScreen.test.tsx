@@ -68,7 +68,7 @@ describe('CreatorsScreen — "Usar" revalida contra /coupon en vez de aplicar a 
 
     await renderAndPressUsar();
 
-    expect(mockedValidateCoupon).toHaveBeenCalledWith('COPA10');
+    expect(mockedValidateCoupon).toHaveBeenCalledWith('COPA10', [{ id: 1, qty: 1 }]);
     expect(useCart.getState().coupon).toBeNull();
     expect(useToast.getState().message).toMatch(/Compra mínima/);
     expect(navigation.navigate).not.toHaveBeenCalled();

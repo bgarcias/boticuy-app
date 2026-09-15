@@ -1,15 +1,23 @@
 import React from 'react';
 import TestRenderer, { act } from 'react-test-renderer';
+import { TextInput } from 'react-native';
 
 import { CouponField } from './CouponField';
 import { useCart } from '../store/cartStore';
+import * as couponsApi from '../api/coupons';
+
+jest.mock('../api/coupons');
+
+const mockedValidateCoupon = couponsApi.validateCoupon as jest.Mock;
 
 const asTree = (node: TestRenderer.ReactTestRenderer) => JSON.stringify(node.toJSON());
+const flush = () => act(() => new Promise<void>((resolve) => setImmediate(() => resolve())));
 
 let renderer: TestRenderer.ReactTestRenderer | undefined;
 
 beforeEach(() => {
   useCart.setState({ items: [], coupon: null });
+  jest.clearAllMocks();
 });
 
 afterEach(() => {
@@ -52,5 +60,40 @@ describe('CouponField — cupón aplicado bajo el monto mínimo', () => {
     expect(tree).toContain('PROMO');
     expect(tree).toContain('10.00'); // 10% de 100
     expect(tree).not.toContain('agrega');
+  });
+});
+
+describe('CouponField — validación de restricción de producto (seguimiento de A2)', () => {
+  test('manda los ítems del carrito a /coupon y muestra el rechazo real sin aplicar el cupón', async () => {
+    useCart.setState({
+      items: [{ productId: 1, name: 'Producto', image: '', unitPrice: 20, quantity: 2, stockLimit: null }],
+      coupon: null,
+    });
+    mockedValidateCoupon.mockResolvedValue({
+      valid: false,
+      reason: 'Este cupón no es válido para el carrito actual',
+    });
+
+    act(() => {
+      renderer = TestRenderer.create(<CouponField />);
+    });
+
+    const input = renderer!.root.findByType(TextInput);
+    act(() => {
+      input.props.onChangeText('SOLOPROD5');
+    });
+    const [applyBtn] = renderer!.root.findAll(
+      (n: TestRenderer.ReactTestInstance) => typeof n.props.onPress === 'function'
+    );
+    act(() => {
+      applyBtn.props.onPress();
+    });
+    await flush();
+
+    expect(mockedValidateCoupon).toHaveBeenCalledWith('SOLOPROD5', [{ id: 1, qty: 2 }]);
+    const tree = asTree(renderer!);
+    expect(tree).toContain('Este cupón no es válido para el carrito actual');
+    // No se guarda como aplicado: sigue mostrando el input, no el chip verde.
+    expect(useCart.getState().coupon).toBeNull();
   });
 });

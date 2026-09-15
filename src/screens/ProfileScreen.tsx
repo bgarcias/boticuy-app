@@ -104,11 +104,15 @@ export function ProfileScreen({ navigation }: Props) {
               { icon: 'pricetag-outline' as const, label: 'Mis cupones' },
               { icon: 'location-outline' as const, label: 'Mis direcciones' },
             ].map((r) => (
-              <View key={r.label} style={[styles.menuRow, styles.menuRowMuted]}>
+              <Pressable
+                key={r.label}
+                style={[styles.menuRow, styles.menuRowMuted]}
+                onPress={() => navigation.navigate('Login')}
+              >
                 <Ionicons name={r.icon} size={22} color={colors.textMuted} />
                 <Text style={[styles.menuLabel, { color: colors.textMuted }]}>{r.label}</Text>
                 <Ionicons name="lock-closed" size={14} color={colors.textMuted} />
-              </View>
+              </Pressable>
             ))}
           </View>
         </>

@@ -4,14 +4,18 @@ import { Alert } from 'react-native';
 
 import { AddressesScreen } from './AddressesScreen';
 import { useToast } from '../store/toastStore';
+import { useAuth } from '../store/authStore';
 import * as addressesApi from '../api/addresses';
 import type { SavedAddress } from '../types';
 
 // AddressesScreen usa useFocusEffect solo para recargar al recibir foco — en
 // este test no hay NavigationContainer real, así que se reemplaza por un
 // simple efecto en el montaje (mismo timing que nos interesa: "al abrir").
+// useNavigation también se reemplaza (lo consume useRequireAuth, ver A5) —
+// basta con un `replace` espiable, no se prueba la redirección acá.
 jest.mock('@react-navigation/native', () => ({
   useFocusEffect: (cb: () => void) => require('react').useEffect(cb, []),
+  useNavigation: () => ({ replace: jest.fn() }),
 }));
 jest.mock('../api/addresses');
 
@@ -35,6 +39,9 @@ const address: SavedAddress = {
 
 beforeEach(() => {
   useToast.setState({ message: null, seq: 0, variant: 'success', duration: 1800 });
+  // Addresses está protegida por A5 (useRequireAuth) — sin sesión "lista", la
+  // pantalla no renderiza nada (return null) y nunca llegaría al botón de borrar.
+  useAuth.setState({ user: { id: 1, email: 'test@boticuy.com', nombre: 'Test' }, tokenReady: true });
   jest.clearAllMocks();
   // Simula al usuario tocando siempre "Eliminar" en el diálogo de confirmación.
   jest.spyOn(Alert, 'alert').mockImplementation((_title, _msg, buttons) => {

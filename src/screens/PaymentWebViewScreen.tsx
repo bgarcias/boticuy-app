@@ -11,6 +11,10 @@ import { colors, spacing, radius } from '../theme';
 
 type Props = NativeStackScreenProps<RootStackParamList, 'PaymentWebView'>;
 
+/** Si el WebView no termina de cargar el formulario en este tiempo, se ofrece
+ *  salir en vez de dejar el overlay de carga para siempre (ver B12). */
+const LOAD_TIMEOUT_MS = 30_000;
+
 function buildHtml(publicKey: string, formToken: string, amount: number) {
   const total = (amount || 0).toFixed(2);
   return `<!DOCTYPE html><html><head>
@@ -70,6 +74,11 @@ export function PaymentWebViewScreen({ route, navigation }: Props) {
   // instante, un state recién se ve reflejado en el siguiente render.
   const validatingRef = useRef(false);
   const completedRef = useRef(false);
+  // Espejo de `loading` en un ref: el timeout de carga (ver más abajo) se arma
+  // una sola vez al montar, así que su closure no ve las actualizaciones
+  // posteriores de `loading` — necesita leer el valor vigente en el momento en
+  // que el timer dispara, no el de cuando se creó.
+  const loadingRef = useRef(true);
 
   // El pedido ya se creó antes del pago; aquí solo se confirma y se limpia el carrito.
   const complete = () => {
@@ -100,6 +109,17 @@ export function PaymentWebViewScreen({ route, navigation }: Props) {
     }
   };
 
+  // El 3D Secure del banco emisor (ACS) puede navegar a cualquier dominio —
+  // imposible de enumerar de antemano — así que una whitelist fija de orígenes
+  // rompe el challenge. En su lugar se permite cualquier navegación https
+  // legítima y se bloquea todo lo demás (deep-links externos, `javascript:`,
+  // `intent:`, etc.), que es lo que el hallazgo de seguridad original buscaba
+  // evitar en realidad.
+  const onShouldStartLoadWithRequest = (request: { url?: string }) => {
+    const url = String(request?.url || '');
+    return url.startsWith('https://');
+  };
+
   const onMessage = async (e: any) => {
     let msg: any;
     try {
@@ -127,25 +147,49 @@ export function PaymentWebViewScreen({ route, navigation }: Props) {
   // checkout" de la rama de error (llama navigation.goBack(), que dispara este mismo
   // evento) — un solo mecanismo para los dos casos.
   //
-  // - Si hay una validación en curso (validatingRef): bloquea la salida sin diálogo.
-  //   Una respuesta real de Izipay se está procesando; dejar salir ahí arriesga que el
-  //   usuario abandone justo cuando el pago sí se completó.
-  // - Si no la hay y el pago no se completó (completedRef): avisa al servidor
+  // - Si el pago ya se completó (completedRef): SIEMPRE deja salir, sin mirar
+  //   validatingRef. Se chequea primero a propósito (ver C6 en
+  //   boticuy-hallazgos-completo.md): complete() llama a navigation.replace()
+  //   mientras validatingRef todavía es true (recién se resetea en el `finally`
+  //   de confirmPayment, que corre después) — si este listener miraba
+  //   validatingRef primero, cancelaba con e.preventDefault() la navegación de
+  //   éxito que el propio pago exitoso acababa de disparar, dejando la pantalla
+  //   colgada pese a que el pedido ya había quedado 'processing' en el servidor.
+  // - Si no se completó y hay una validación en curso (validatingRef): bloquea
+  //   la salida sin diálogo. Una respuesta real de Izipay se está procesando;
+  //   dejar salir ahí arriesga que el usuario abandone justo cuando el pago sí
+  //   se completó.
+  // - Si no se completó y no hay validación en curso: avisa al servidor
   //   (fire-and-forget, sin bloquear) y deja que la navegación siga normal. El endpoint
   //   es idempotente y solo actúa si el pedido sigue 'pending' de tarjeta — llamarlo sin
   //   condición adicional aquí es seguro.
   useEffect(() => {
     const unsubscribe = navigation.addListener('beforeRemove', (e) => {
+      if (completedRef.current) {
+        return;
+      }
       if (validatingRef.current) {
         e.preventDefault();
         return;
       }
-      if (!completedRef.current) {
-        abandonPayment(orderId, checkoutToken).catch(() => {});
-      }
+      abandonPayment(orderId, checkoutToken).catch(() => {});
     });
     return unsubscribe;
   }, [navigation, orderId, checkoutToken]);
+
+  // La carga inicial (script de Izipay + formulario embebido) puede colgarse
+  // sin avisar — sin esto, el overlay "Cargando pago seguro…" se queda para
+  // siempre (ver B12). No cubre `validating`: ahí ya hay una respuesta real de
+  // Izipay en curso, cortarla a los 30s arriesgaría interrumpir un pago que sí
+  // se está confirmando.
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      if (loadingRef.current) {
+        setError('La carga del formulario de pago está tardando demasiado. Intenta de nuevo.');
+      }
+    }, LOAD_TIMEOUT_MS);
+    return () => clearTimeout(timer);
+  }, []);
 
   if (error) {
     return (
@@ -162,14 +206,17 @@ export function PaymentWebViewScreen({ route, navigation }: Props) {
   return (
     <View style={styles.container}>
       <WebView
-        // Acotado a boticuy.com (baseUrl del HTML embebido) y *.micuentaweb.pe (Izipay):
-        // antes era ['*'], permitiendo que el WebView navegara a cualquier origen.
-        originWhitelist={['https://boticuy.com', 'https://*.micuentaweb.pe']}
         source={{ html: buildHtml(publicKey, formToken, confirm.total), baseUrl: 'https://boticuy.com' }}
         onMessage={onMessage}
-        onLoadEnd={() => setLoading(false)}
+        onShouldStartLoadWithRequest={onShouldStartLoadWithRequest}
+        onLoadEnd={() => {
+          loadingRef.current = false;
+          setLoading(false);
+        }}
         javaScriptEnabled
         domStorageEnabled
+        thirdPartyCookiesEnabled
+        sharedCookiesEnabled
       />
       {(loading || validating) && (
         <View style={styles.overlay}>

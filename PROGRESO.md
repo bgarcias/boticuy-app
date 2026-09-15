@@ -24,6 +24,10 @@ Este documento se actualiza al final de cada fase completada. Refleja únicament
 
 **Importante para el equipo:** mientras ambas apps (legacy y rediseño) sigan activas, los eventos de desarrollo/pruebas del rediseño se mezclarán con los datos de esa misma cuenta de PostHog. Todavía no está decidido si el rediseño se queda con esta cuenta a largo plazo o si se abrirá una cuenta nueva antes de salir a producción — hasta que se decida, cualquier análisis de los dashboards de PostHog debe tener en cuenta que puede haber eventos de prueba mezclados.
 
+**Actualización (2026-09-07, al cerrar B11 de la auditoría TI):** la cuenta de PostHog actual **fue generada por Fernando** — no está confirmado si es una cuenta personal o corporativa (correo personal vs. corporativo), solo se sabe quién la creó. La key ya no vive hardcodeada en `app.config.js` — se movió a `eas.json` (perfiles `preview`/`production`) y a `.env.staging`, mismo patrón que las URLs de API (ver `boticuy-hallazgos-completo.md`, hallazgo B11). Esto es solo una relocalización de dónde vive el valor, no un cambio de cuenta — sigue siendo la misma key.
+
+**Pendiente, de gestión, no de código:** validar si la cuenta es personal o corporativa antes de decidir si corresponde migrar a una cuenta propia de la empresa. Si se decide migrar, los pasos son crear el proyecto nuevo en PostHog bajo una cuenta de la empresa y generar su Project API Key ahí — nada de esto es código. Una vez exista esa key nueva, el cambio en este repo es trivial: reemplazar el valor de `EXPO_PUBLIC_POSTHOG_KEY` en `eas.json` (`preview` y `production`) y en `.env.staging` — el código ya está listo para recibir cualquier key sin tocarse de nuevo.
+
 ---
 
 ## Nota — Cierre del barrido de paridad (`docs/historial/PARIDAD_CHECK.md`, 2026-07-10)
@@ -125,12 +129,12 @@ Esto es una característica del **hosting actual** (compatible con contención e
 
 Agregada al cierre de la semana de pruebas en staging (16-23 julio 2026), para no olvidar nada al pasar de probar contra `http://35.209.93.250/` a subir el build final a las tiendas.
 
-- [ ] Confirmar que ningún build de producción se genera con `NODE_ENV=staging` ni con `.env.staging` (ya está resuelto por diseño: sin esa variable, cae a producción por defecto — ver `app.config.js` — pero confirmar en el build final antes de subir a Play Store).
-- [ ] Confirmar que el plugin de cleartext HTTP (`plugins/withCleartextHost.js`) no se incluye en el build de producción (ya está resuelto por diseño: solo se activa si el protocolo de `EXPO_PUBLIC_BFF_URL` es `http:` — pero confirmar en el build final, ej. inspeccionando el `AndroidManifest.xml` generado por `expo prebuild`).
-- [ ] Grep final de la IP de staging (`35.209.93.250`) en todo el proyecto antes de generar el build de producción, para descartar que haya quedado hardcodeada en algún lugar fuera de `.env.staging`.
-- [ ] Confirmar que el módulo de Izipay en el sitio de producción (`boticuy.com`) sigue en modo `PRODUCTION` (esto es configuración de WordPress, no de la app, pero relevante para no lanzar con pagos reales mal configurados).
-- [ ] Revisar que no queden `console.log` de diagnóstico temporales agregados durante la semana de pruebas.
-- [ ] Confirmar `ordersEnabled` en producción sigue en su valor real esperado (revisar si debe seguir en `false` hasta nueva decisión, o activarse para el lanzamiento).
+- [x] ~~Confirmar que ningún build de producción se genera con `NODE_ENV=staging` ni con `.env.staging`~~ — **automático desde 2026-09-04, ver `app.config.js` (`assertProductionConfigIsSafe`, hallazgo C3).** Un build con perfil `production` cuya `EXPO_PUBLIC_BFF_URL`/`STORE_API_URL`/`WP_API_URL` no apunten a `https://boticuy.com` ya no se genera — falla con un error explícito en el log del build, antes de producir ningún artefacto.
+- [x] ~~Confirmar que el plugin de cleartext HTTP no se incluye en el build de producción~~ — **automático desde 2026-09-04, misma validación.** Como el cleartext solo se activa cuando `EXPO_PUBLIC_BFF_URL` es `http:`, el chequeo de URLs de arriba ya lo cubre — no hace falta inspeccionar el `AndroidManifest.xml` a mano.
+- [ ] Grep final de la IP de staging (`35.209.93.250`) en todo el proyecto antes de generar el build de producción, para descartar que haya quedado hardcodeada en algún lugar fuera de `.env.staging`. **Sigue manual** — es una búsqueda en el código fuente, no un valor de configuración verificable desde `app.config.js`.
+- [ ] Confirmar que el módulo de Izipay en el sitio de producción (`boticuy.com`) sigue en modo `PRODUCTION` (esto es configuración de WordPress, no de la app, pero relevante para no lanzar con pagos reales mal configurados). **Sigue manual** — vive en wp-admin, fuera del alcance de la app.
+- [ ] Revisar que no queden `console.log` de diagnóstico temporales agregados durante la semana de pruebas. **Sigue manual** — higiene de código, no de configuración.
+- [x] ~~Confirmar `ordersEnabled` en producción sigue en su valor real esperado~~ — **automático desde 2026-09-04, misma validación.** Un build `production` con `EXPO_PUBLIC_ORDERS_ENABLED` distinto de `"true"` falla, salvo que se defina explícitamente `ORDERS_DISABLED_CONFIRMED=true` al construir (vía de escape para un soft-launch intencional con pedidos desactivados) — la decisión de negocio queda registrada en el comando del build, no solo en este checklist.
 
 ---
 

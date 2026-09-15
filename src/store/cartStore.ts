@@ -10,6 +10,7 @@ interface CartState {
   add: (product: Product, qty?: number) => void;
   remove: (productId: number) => void;
   setQty: (productId: number, qty: number) => void;
+  updatePrice: (productId: number, unitPrice: number) => void;
   clear: () => void;
   setCoupon: (coupon: AppliedCoupon | null) => void;
   count: () => number;
@@ -66,6 +67,14 @@ export const useCart = create<CartState>()(
                   const capped = i.stockLimit != null ? Math.min(qty, i.stockLimit) : qty;
                   return { ...i, quantity: capped };
                 }),
+        })),
+
+      // Actualiza el precio congelado de un ítem cuando la revalidación (ver
+      // src/utils/cartRevalidation.ts, hallazgo A7) detecta que cambió del
+      // lado del servidor — no toca quantity ni stockLimit.
+      updatePrice: (productId, unitPrice) =>
+        set((state) => ({
+          items: state.items.map((i) => (i.productId === productId ? { ...i, unitPrice } : i)),
         })),
 
       clear: () => set({ items: [], coupon: null }),
