@@ -91,7 +91,7 @@ export function OrderConfirmationScreen({ route, navigation }: Props) {
           <Row label="Total" value={formatSoles(total)} bold />
           {!!pointsAdjusted && (
             <Text style={styles.adjustedHint}>
-              Usamos {pointsRedeemed} de tus {pointsRequested} puntos solicitados — el precio cambió antes de confirmar.
+              Usamos {pointsRedeemed} de tus {pointsRequested} puntos solicitados. El precio cambió antes de confirmar.
             </Text>
           )}
           <View style={styles.divider} />

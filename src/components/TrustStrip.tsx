@@ -4,7 +4,10 @@ import { Ionicons } from '@expo/vector-icons';
 import { colors, spacing, radius } from '../theme';
 
 const ITEMS: { icon: keyof typeof Ionicons.glyphMap; label: string }[] = [
-  { icon: 'bicycle-outline', label: 'Envío gratis\nen Lima' },
+  // Sin "en Lima" (ver M9 en boticuy-hallazgos-completo.md): el envío gratis
+  // por umbral solo existe hoy en una zona real, no en toda Lima ni en
+  // provincias — ver FreeShippingBar.tsx para el detalle completo del fix.
+  { icon: 'bicycle-outline', label: 'Envío gratis\ndisponible' },
   { icon: 'shield-checkmark-outline', label: 'Pago\nseguro' },
   { icon: 'ribbon-outline', label: 'Productos\noriginales' },
   { icon: 'logo-whatsapp', label: 'Asesoría\npor WhatsApp' },

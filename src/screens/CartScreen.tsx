@@ -124,7 +124,7 @@ export function CartScreen({ navigation }: Props) {
               <Text style={styles.price}>{formatSoles(item.unitPrice)}</Text>
               <View style={styles.qty}>
                 <Pressable style={styles.qtyBtn} onPress={() => setQty(item.productId, item.quantity - 1)} accessibilityRole="button" accessibilityLabel={`Disminuir cantidad de ${item.name}`}>
-                  <Text style={styles.qtyBtnText}>–</Text>
+                  <Text style={styles.qtyBtnText}>-</Text>
                 </Pressable>
                 <Text style={styles.qtyNum}>{item.quantity}</Text>
                 <Pressable style={styles.qtyBtn} onPress={() => setQty(item.productId, item.quantity + 1)} accessibilityRole="button" accessibilityLabel={`Aumentar cantidad de ${item.name}`}>

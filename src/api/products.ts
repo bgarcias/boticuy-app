@@ -24,6 +24,24 @@ interface ListParams {
   featured?: boolean;
 }
 
+const STORE_MAX_PER_PAGE = 100;
+
+/** Pide los productos por `include=` en lotes de hasta 100 IDs; si falla un lote, falla todo. */
+async function fetchProductsInBatches(ids: number[]): Promise<Product[]> {
+  const batches: number[][] = [];
+  for (let i = 0; i < ids.length; i += STORE_MAX_PER_PAGE) {
+    batches.push(ids.slice(i, i + STORE_MAX_PER_PAGE));
+  }
+  const pages = await Promise.all(
+    batches.map((batch) =>
+      storeClient.get<Product[]>('/products', {
+        params: { include: batch.join(','), per_page: batch.length },
+      }),
+    ),
+  );
+  return pages.flatMap((r) => r.data);
+}
+
 export interface ProductList {
   products: Product[];
   total: number;
@@ -74,16 +92,14 @@ export async function fetchProducts(params: ListParams = {}): Promise<ProductLis
     // Paso 2: se le pide a la Store API el conjunto COMPLETO (no solo la página
     // pedida) — es la única forma de saber cuáles de esos IDs son realmente
     // visibles hoy (stock, catálogo vs. búsqueda, etc.), que es lo que define
-    // el total real (ver M4). A esta escala (tope de 200 IDs) es una sola
-    // petición barata, sin necesidad de paginar la propia consulta.
-    const res = await storeClient.get<Product[]>('/products', {
-      params: { include: ids.join(','), per_page: ids.length },
-    });
+    // el total real (ver M4). Se pide en lotes de 100 IDs, unidos antes de
+    // reordenar.
+    const found = await fetchProductsInBatches(ids);
 
     // Paso 3: reordenar por la posición de cada producto en `ids` (el orden de
     // popularidad que ya trajo el BFF) — la Store API no lo preserva sola.
     const order = new Map(ids.map((id, i) => [id, i]));
-    const ordered = [...res.data].sort((a, b) => (order.get(a.id) ?? 0) - (order.get(b.id) ?? 0));
+    const ordered = [...found].sort((a, b) => (order.get(a.id) ?? 0) - (order.get(b.id) ?? 0));
 
     // Paso 4: recién acá se pagina, sobre el conjunto ya ordenado y ya
     // filtrado por visibilidad real — total/totalPages salen de este mismo
@@ -130,10 +146,8 @@ export async function fetchProduct(id: number): Promise<Product> {
  */
 export async function fetchProductsByIds(ids: number[]): Promise<Product[]> {
   if (ids.length === 0) return [];
-  const res = await storeClient.get<Product[]>('/products', {
-    params: { include: ids.join(','), per_page: ids.length },
-  });
-  return res.data.map(decodeProduct);
+  const found = await fetchProductsInBatches(ids);
+  return found.map(decodeProduct);
 }
 
 /**

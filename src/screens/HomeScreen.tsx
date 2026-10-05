@@ -111,7 +111,10 @@ export function HomeScreen({ navigation }: Props) {
       {/* Hero con CTA */}
       <View style={styles.hero}>
         <Text style={styles.heroTitle}>Te llevamos a la cima</Text>
-        <Text style={styles.heroSub}>Vitaminas y suplementos con envío gratis en Lima desde {extra.currencySymbol ?? 'S/'}{extra.envioGratisDesde ?? 69}</Text>
+        {/* Sin "en Lima" (ver M9 en boticuy-hallazgos-completo.md): el envío
+            gratis por umbral solo existe hoy en una zona real, no en toda
+            Lima ni en provincias. */}
+        <Text style={styles.heroSub}>Vitaminas y suplementos con envío gratis desde {extra.currencySymbol ?? 'S/'}{extra.envioGratisDesde ?? 69} en zonas seleccionadas</Text>
         <Pressable style={styles.heroCta} onPress={() => navigation.navigate('Catalogo')}>
           <Text style={styles.heroCtaText}>Explorar catálogo</Text>
           <Ionicons name="arrow-forward" size={16} color={colors.primary} />

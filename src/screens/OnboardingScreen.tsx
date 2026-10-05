@@ -26,9 +26,12 @@ const SLIDES: { icon: keyof typeof Ionicons.glyphMap; title: string; text: strin
     text: 'Vitaminas y suplementos de marcas confiables, a un toque de tu casa.',
   },
   {
+    // Sin "en Lima" (ver M9 en boticuy-hallazgos-completo.md): el envío
+    // gratis por umbral solo existe hoy en una zona real, no en toda Lima ni
+    // en provincias.
     icon: 'bicycle',
-    title: 'Envío gratis en Lima',
-    text: `En tus compras desde ${extra.currencySymbol ?? 'S/'}${extra.envioGratisDesde ?? 69}. Recíbelo en la puerta de tu casa.`,
+    title: 'Envío gratis disponible',
+    text: `En tus compras desde ${extra.currencySymbol ?? 'S/'}${extra.envioGratisDesde ?? 69} en zonas seleccionadas. Recíbelo en la puerta de tu casa.`,
   },
   {
     icon: 'chatbubbles',

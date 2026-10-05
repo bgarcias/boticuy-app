@@ -13,6 +13,8 @@ import { useToast } from '../store/toastStore';
 import { revalidateCart } from '../utils/cartRevalidation';
 import { fetchDepartamentos, fetchProvincias, fetchDistritos } from '../api/ubigeo';
 import { fetchShipping } from '../api/shipping';
+import { fetchQuote } from '../api/quote';
+import type { QuoteOk } from '../api/quote';
 import { fetchAddresses, addAddress } from '../api/addresses';
 import { buildAddressPayload } from '../utils/addressPayload';
 import { TextField } from '../components/TextField';
@@ -132,6 +134,23 @@ export function CheckoutScreen({ navigation }: Props) {
 
   const envio = shipping ? shipping.cost : 0;
   const finalTotal = Math.max(0, subtotal - discount - pointsDiscount + envio);
+  // Subtotal ya descontado por cupón o puntos, para cotizar el envío.
+  const subtotalNeto = Math.max(0, subtotal - discount - pointsDiscount);
+
+  // Cotización del servidor (mismo cálculo que el cobro). `quoteState.key` identifica la
+  // entrada cotizada: solo vale si coincide con la actual; `data: null` es una cotización
+  // fallida, y en ese caso el checkout usa el cálculo local de arriba.
+  const [quoteState, setQuoteState] = useState<{ key: string; data: QuoteOk | null } | null>(null);
+  const quoteKey = `${items.map((i) => `${i.productId}x${i.quantity}`).join(',')}|${coupon?.code ?? ''}|${pointsToRedeem}|${distrito?.idUbigeo ?? ''}`;
+  const quoteSettled = quoteState !== null && quoteState.key === quoteKey;
+  const quote = quoteSettled ? quoteState.data : null;
+  const quoting = !!distrito?.idUbigeo && !quoteSettled;
+  // Mientras se cotiza (o, sin cotización del servidor, mientras carga el envío) el total muestra "Calculando…".
+  const totalLoading = quoting || (!quote && loadingShipping);
+  const shownDiscount = quote ? quote.coupon_discount : discount;
+  const shownPointsDiscount = quote ? quote.points_discount : pointsDiscount;
+  const shownPointsRedeemed = quote && quote.points_redeemed_adjusted ? quote.points_redeemed : pointsToRedeem;
+  const shownTotal = quote ? quote.total : finalTotal;
 
   // Cupón de un tipo que cartStore.discount() no calcula (ej. fixed_product) —
   // mismo criterio que CouponField.tsx (ver M10 en boticuy-hallazgos-completo.md):
@@ -239,14 +258,53 @@ export function CheckoutScreen({ navigation }: Props) {
   useEffect(() => {
     if (!distrito?.idUbigeo) {
       setShipping(null);
+      setLoadingShipping(false);
       return;
     }
+    // Solo cuenta la respuesta de la última cotización: si cambian el distrito,
+    // el cupón o los puntos mientras hay una en curso, la anterior se descarta.
+    let current = true;
     setLoadingShipping(true);
-    fetchShipping(distrito.idUbigeo, subtotal)
-      .then(setShipping)
-      .catch(() => setShipping(null))
-      .finally(() => setLoadingShipping(false));
-  }, [distrito?.idUbigeo, subtotal]);
+    fetchShipping(distrito.idUbigeo, subtotal, subtotalNeto)
+      .then((result) => {
+        if (current) setShipping(result);
+      })
+      .catch(() => {
+        if (current) setShipping(null);
+      })
+      .finally(() => {
+        if (current) setLoadingShipping(false);
+      });
+    return () => {
+      current = false;
+    };
+  }, [distrito?.idUbigeo, subtotal, subtotalNeto]);
+
+  // Cotización del servidor: espera 400 ms desde el último cambio de ítems, cupón, puntos o
+  // distrito; si llega una respuesta de una petición anterior, se descarta.
+  useEffect(() => {
+    const idUbigeo = distrito?.idUbigeo;
+    if (!idUbigeo) return;
+    let current = true;
+    const timer = setTimeout(() => {
+      fetchQuote(
+        items.map((i) => ({ id: i.productId, qty: i.quantity })),
+        coupon?.code,
+        pointsToRedeem,
+        idUbigeo,
+      )
+        .then((res) => {
+          if (current) setQuoteState({ key: quoteKey, data: res.ok ? res : null });
+        })
+        .catch(() => {
+          if (current) setQuoteState({ key: quoteKey, data: null });
+        });
+    }, 400);
+    return () => {
+      current = false;
+      clearTimeout(timer);
+    };
+  }, [quoteKey]);
 
   const onDep = async (d: UbigeoTerm) => {
     setDepartamento(d);
@@ -407,6 +465,9 @@ export function CheckoutScreen({ navigation }: Props) {
     // cartStore.discount() en `baseParams` cuando está presente.
     const couponParams = (ord: { coupon_discount?: number }) =>
       ord.coupon_discount !== undefined ? { discount: ord.coupon_discount } : {};
+    // Envío cobrado por el servidor, con IGV: reemplaza la cotización del checkout.
+    const shippingParams = (ord: { shipping_total?: number }) =>
+      ord.shipping_total !== undefined ? { envio: ord.shipping_total, shippingUnavailable: false } : {};
     const orderPayload = {
       items: items.map((i) => ({ id: i.productId, qty: i.quantity })),
       customer: { nombre: nombre.trim(), email: email.trim(), telefono: telefono.trim(), tipoDoc: 'DNI', numDoc: stripInnerSpaces(numDoc.trim()) },
@@ -444,7 +505,7 @@ export function CheckoutScreen({ navigation }: Props) {
         }
         if (!ord.order_id) {
           // Vista previa (ordersEnabled=false): no hay pedido real, no se llama a Izipay.
-          navigation.navigate('OrderConfirmation', { ...baseParams, total: ord.total ?? finalTotal, orderNumber: ord.number, ...pointsParams(ord), ...couponParams(ord) });
+          navigation.navigate('OrderConfirmation', { ...baseParams, total: ord.total ?? finalTotal, orderNumber: ord.number, ...pointsParams(ord), ...couponParams(ord), ...shippingParams(ord) });
           return;
         }
         const ft = await getFormToken(ord.order_id, ord.checkout_token);
@@ -457,7 +518,7 @@ export function CheckoutScreen({ navigation }: Props) {
           formToken: ft.formToken,
           publicKey: ft.publicKey,
           checkoutToken: ord.checkout_token,
-          confirm: { ...baseParams, total: ord.total ?? finalTotal, orderNumber: ord.number, ...pointsParams(ord), ...couponParams(ord) },
+          confirm: { ...baseParams, total: ord.total ?? finalTotal, orderNumber: ord.number, ...pointsParams(ord), ...couponParams(ord), ...shippingParams(ord) },
         });
       } catch {
         setErrors({ submit: 'Error al iniciar el pago. Intenta de nuevo.' });
@@ -477,7 +538,7 @@ export function CheckoutScreen({ navigation }: Props) {
         setErrors({ submit: res.reason ?? 'No pudimos crear el pedido. Intenta de nuevo.' });
         return;
       }
-      navigation.navigate('OrderConfirmation', { ...baseParams, total: res.total ?? finalTotal, orderNumber: res.number, ...pointsParams(res), ...couponParams(res) });
+      navigation.navigate('OrderConfirmation', { ...baseParams, total: res.total ?? finalTotal, orderNumber: res.number, ...pointsParams(res), ...couponParams(res), ...shippingParams(res) });
     } catch {
       setErrors({ submit: 'Error de conexión al crear el pedido.' });
     } finally {
@@ -589,33 +650,40 @@ export function CheckoutScreen({ navigation }: Props) {
         {/* Resumen */}
         <View style={styles.summary}>
           <Row label="Subtotal" value={formatSoles(subtotal)} />
-          {discountPreviewUnsupported ? (
+          {!quote && discountPreviewUnsupported ? (
             <Row label={`Descuento (${coupon!.code})`} value="Se verá al confirmar" highlight />
           ) : (
-            discount > 0 && (
-              <Row label={`Descuento${coupon ? ` (${coupon.code})` : ''}`} value={`− ${formatSoles(discount)}`} highlight />
+            shownDiscount > 0 && (
+              <Row label={`Descuento${coupon ? ` (${coupon.code})` : ''}`} value={`− ${formatSoles(shownDiscount)}`} highlight />
             )
           )}
-          {pointsDiscount > 0 && (
-            <Row label={`Puntos canjeados (${pointsToRedeem})`} value={`− ${formatSoles(pointsDiscount)}`} highlight />
+          {shownPointsDiscount > 0 && (
+            <Row label={`Puntos canjeados (${shownPointsRedeemed})`} value={`− ${formatSoles(shownPointsDiscount)}`} highlight />
           )}
           <Row
             label="Envío"
             value={
               !distrito
                 ? 'Elige tu distrito'
-                : loadingShipping
+                : totalLoading
                   ? 'Calculando…'
-                  : shipping
-                    ? shipping.is_free
-                      ? 'Gratis'
-                      : formatSoles(shipping.cost)
-                    : '—'
+                  : quote
+                    ? quote.shipping_total > 0
+                      ? formatSoles(quote.shipping_total)
+                      : 'Gratis'
+                    : shipping
+                      ? shipping.is_free
+                        ? 'Gratis'
+                        : formatSoles(shipping.cost)
+                      : '-'
             }
           />
-          {shipping && !shipping.is_free && shipping.free_threshold != null && (
+          {/* `shipping.zone` es el nombre interno de la zona de WooCommerce
+              (ej. "Lima 1 CERCANOS", "Peru, Callao") — administrativo, nunca
+              texto pensado para el cliente. No se interpola acá. */}
+          {shipping && !shipping.is_free && shipping.free_threshold != null && (!quote || quote.shipping_total > 0) && (
             <Text style={styles.envioHint}>
-              Envío gratis en {shipping.zone} desde {formatSoles(shipping.free_threshold)}.
+              Envío gratis desde {formatSoles(shipping.free_threshold)} en tu zona.
             </Text>
           )}
         </View>
@@ -626,9 +694,9 @@ export function CheckoutScreen({ navigation }: Props) {
       <View style={[styles.bottomBar, { paddingBottom: insets.bottom + spacing.md }]}>
         <View>
           <Text style={styles.totalLabel}>Total</Text>
-          <Text style={styles.totalValue}>{formatSoles(finalTotal)}</Text>
+          <Text style={styles.totalValue}>{totalLoading ? 'Calculando…' : formatSoles(shownTotal)}</Text>
         </View>
-        <Pressable style={[styles.cta, submitting && { opacity: 0.7 }]} onPress={onSubmit} disabled={submitting}>
+        <Pressable style={[styles.cta, (submitting || quoting) && { opacity: 0.7 }]} onPress={onSubmit} disabled={submitting || quoting}>
           {submitting ? <ActivityIndicator color={colors.white} /> : <Text style={styles.ctaText}>Confirmar pedido</Text>}
         </Pressable>
       </View>

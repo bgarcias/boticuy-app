@@ -61,12 +61,12 @@ export function CouponField() {
           <Ionicons name={belowMinimum ? 'alert-circle' : 'pricetag'} size={16} color={belowMinimum ? colors.warning : colors.success} />
           {belowMinimum ? (
             <Text style={styles.appliedText}>
-              Cupón <Text style={{ fontWeight: '800' }}>{coupon.code}</Text> — agrega{' '}
+              Cupón <Text style={{ fontWeight: '800' }}>{coupon.code}</Text>, agrega{' '}
               {formatSoles(coupon.minimum_amount - subtotal)} más para usarlo
             </Text>
           ) : previewUnsupported ? (
             <Text style={styles.appliedText}>
-              Cupón <Text style={{ fontWeight: '800' }}>{coupon.code}</Text> válido — el descuento se verá al confirmar tu pedido
+              Cupón <Text style={{ fontWeight: '800' }}>{coupon.code}</Text> válido. El descuento se verá al confirmar tu pedido
             </Text>
           ) : (
             <Text style={styles.appliedText}>

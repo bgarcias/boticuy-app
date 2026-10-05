@@ -17,7 +17,20 @@ interface Props {
   level?: PointsInfo['level'] | null;
 }
 
-/** Barra de progreso hacia el envío gratis (nudge de conversión). */
+/**
+ * Barra de progreso hacia el envío gratis (nudge de conversión).
+ *
+ * El texto NO menciona "Lima" (ver M9 en boticuy-hallazgos-completo.md): el
+ * envío gratis por umbral solo existe hoy en una zona real ("Lima 1
+ * CERCANOS"), no en el resto de Lima ni en provincias — prometer algo
+ * geográfico acá sería falso para la mayoría de clientes que sí están en
+ * Lima. Se generaliza el mensaje ("zonas seleccionadas") en vez de detectar
+ * la zona real del cliente en esta pantalla — el costo y la disponibilidad
+ * reales ya se calculan y muestran correctamente más adelante, en Checkout y
+ * en la confirmación (`Boticuy_App_Shipping::compute_cost()`), una vez que
+ * se conoce el destino real; esta barra es solo un nudge de marketing antes
+ * de ese punto, sin acceso a ubigeo.
+ */
 export function FreeShippingBar({ subtotal, level }: Props) {
   const envioGratisDesdeNivel = useShippingConfig((s) => s.envioGratisDesdeNivel);
   const meta = level === 'plata' || level === 'oro' ? envioGratisDesdeNivel : extra.envioGratisDesde ?? 69;
@@ -35,11 +48,11 @@ export function FreeShippingBar({ subtotal, level }: Props) {
         />
         <Text style={styles.text}>
           {reached ? (
-            <Text style={{ color: colors.success, fontWeight: '700' }}>¡Tienes envío gratis en Lima! 🎉</Text>
+            <Text style={{ color: colors.success, fontWeight: '700' }}>¡Tienes envío gratis en zonas seleccionadas! 🎉</Text>
           ) : (
             <>
               Te faltan <Text style={styles.bold}>{formatSoles(falta)}</Text> para{' '}
-              <Text style={styles.bold}>envío gratis</Text> en Lima
+              <Text style={styles.bold}>envío gratis</Text> en zonas seleccionadas
             </>
           )}
         </Text>

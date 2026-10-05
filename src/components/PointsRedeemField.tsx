@@ -25,7 +25,9 @@ interface Props {
 export function PointsRedeemField({ balance, subtotal, value, onChange }: Props) {
   if (balance <= 0) return null;
 
-  const capPoints = Math.floor((subtotal * 0.3) / SOLES_PER_POINT);
+  // Tope del 30% en céntimos enteros, redondeado a medio céntimo hacia arriba.
+  const capCents = Math.floor((Math.round(subtotal * 100) * 3 + 5) / 10);
+  const capPoints = Math.floor(capCents / 5);
   const maxRedeemable = Math.max(0, Math.min(balance, capPoints));
   if (maxRedeemable <= 0) return null;
   const maxDiscount = Math.round(maxRedeemable * SOLES_PER_POINT * 100) / 100;

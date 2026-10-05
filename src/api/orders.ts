@@ -45,6 +45,8 @@ export interface CreateOrderResult {
    *  boticuy-hallazgos-completo.md: la app no sabe previsualizar todos los
    *  tipos de descuento, pero el servidor sí los calcula todos). */
   coupon_discount?: number;
+  /** Envío cobrado en el pedido, con IGV; 0 si fue gratis. */
+  shipping_total?: number;
 }
 
 const ORDERS_ENABLED = Constants.expoConfig?.extra?.ordersEnabled === true;

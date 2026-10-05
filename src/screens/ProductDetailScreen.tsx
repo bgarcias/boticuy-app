@@ -156,7 +156,10 @@ export function ProductDetailScreen({ route, navigation }: Props) {
             </View>
             <View style={styles.trustItem}>
               <Ionicons name="bicycle-outline" size={18} color={colors.primary} />
-              <Text style={styles.trustText}>Envío gratis Lima ≥ {appExtra.currencySymbol ?? 'S/'}{appExtra.envioGratisDesde ?? 69}</Text>
+              {/* Sin "Lima" (ver M9 en boticuy-hallazgos-completo.md): el envío
+                  gratis por umbral solo existe hoy en una zona real, no en
+                  toda Lima ni en provincias. */}
+              <Text style={styles.trustText}>Envío gratis ≥ {appExtra.currencySymbol ?? 'S/'}{appExtra.envioGratisDesde ?? 69} en zonas seleccionadas</Text>
             </View>
           </View>
 
@@ -213,7 +216,7 @@ export function ProductDetailScreen({ route, navigation }: Props) {
           <>
             <View style={styles.qty}>
               <Pressable style={styles.qtyBtn} onPress={() => setQty((q) => Math.max(1, q - 1))} hitSlop={6} accessibilityRole="button" accessibilityLabel="Disminuir cantidad">
-                <Text style={styles.qtyBtnText}>–</Text>
+                <Text style={styles.qtyBtnText}>-</Text>
               </Pressable>
               <Text style={styles.qtyNum} accessibilityLabel={`Cantidad ${qty}`}>{qty}</Text>
               <Pressable

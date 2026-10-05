@@ -72,7 +72,7 @@ module.exports = {
     // había quedado desalineado con CHANGELOG.md (que ya documentaba hasta
     // [2.4.1]) — sincronizado acá y cerrado junto con la ronda semanal de
     // hallazgos de la auditoría TI (ver CHANGELOG.md, [2.5.0]).
-    version: '2.5.0',
+    version: '2.5.1',
     orientation: 'portrait',
     icon: './assets/icon.png',
     userInterfaceStyle: 'light',

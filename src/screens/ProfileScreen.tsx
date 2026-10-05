@@ -14,7 +14,7 @@ import { attentionStatus } from '../utils/attention';
 import { colors, spacing, radius } from '../theme';
 
 const extra = (Constants.expoConfig?.extra ?? {}) as { horarioAtencion?: string };
-const HORARIO_ATENCION = extra.horarioAtencion ?? '9:00 AM – 6:00 PM';
+const HORARIO_ATENCION = extra.horarioAtencion ?? '9:00 AM - 6:00 PM';
 
 type Props = CompositeScreenProps<
   BottomTabScreenProps<TabParamList, 'Perfil'>,
