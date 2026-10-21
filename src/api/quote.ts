@@ -1,4 +1,5 @@
 import { bffClient } from './client';
+import { assertPurchaseEnabled } from './guard';
 
 /** Mismo shape que `items` en `POST /order`. */
 export interface QuoteItem {
@@ -39,6 +40,7 @@ export async function fetchQuote(
   pointsRedeem: number,
   idUbigeo: string,
 ): Promise<QuoteResult> {
+  assertPurchaseEnabled();
   const res = await bffClient.post<QuoteResult | undefined>(
     '/quote',
     {

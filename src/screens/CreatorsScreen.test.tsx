@@ -6,6 +6,10 @@ import { useCart } from '../store/cartStore';
 import { useToast } from '../store/toastStore';
 import * as couponsApi from '../api/coupons';
 
+// Estos tests cubren flujos de compra/cuenta que el modo sin compra desactiva por defecto:
+// se fija el flag encendido para seguir probándolos (ver src/config/features.ts).
+jest.mock('../config/features', () => ({ PURCHASE_ENABLED: true }));
+
 jest.mock('../api/coupons');
 
 const mockedFetchApoyaCreador = couponsApi.fetchApoyaCreador as jest.Mock;
@@ -97,5 +101,19 @@ describe('CreatorsScreen — "Usar" revalida contra /coupon en vez de aplicar a 
       minimum_amount: 50,
     });
     expect(navigation.navigate).toHaveBeenCalledWith('Tabs', { screen: 'Catalogo' });
+  });
+});
+
+describe('CreatorsScreen, modo original: conserva su texto de introducción', () => {
+  it('muestra "Usa el código de tu creador y obtén descuento en tu compra. Tú ahorras y ellos suman."', async () => {
+    mockedFetchApoyaCreador.mockResolvedValueOnce([{ code: 'COPA10', name: 'Ana', channel: 'TikTok', amount: 15, active: true }]);
+    mockedFetchMisCupones.mockResolvedValueOnce([]);
+    act(() => {
+      renderer = TestRenderer.create(<CreatorsScreen navigation={navigation} route={route} />);
+    });
+    await flush();
+    const t = renderer!.root.findAll((n: TestRenderer.ReactTestInstance) => (n.type as unknown) === 'Text').map((n: TestRenderer.ReactTestInstance) => [n.props.children].flat(5).join(''));
+    expect(t).toContain('Usa el código de tu creador y obtén descuento en tu compra. Tú ahorras y ellos suman.');
+    expect(t.join(' ')).not.toContain('La web valida el código');
   });
 });

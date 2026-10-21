@@ -1,5 +1,6 @@
 import { bffClient } from './client';
 import type { BankAccount } from '../types';
+import { assertPurchaseEnabled } from './guard';
 
 export interface BankDetailsResult {
   ok: boolean;
@@ -10,6 +11,7 @@ export interface BankDetailsResult {
 
 /** Datos bancarios para "Transferencia bancaria" (parseados desde WooCommerce en el plugin). */
 export async function fetchBankDetails(): Promise<BankDetailsResult> {
+  assertPurchaseEnabled();
   const res = await bffClient.get<BankDetailsResult>('/bank-details');
   return res.data;
 }

@@ -1,7 +1,18 @@
-import React, { useEffect, useState, useCallback } from 'react';
-import { View, Text, StyleSheet, ScrollView, Pressable, FlatList, RefreshControl, TextInput } from 'react-native';
-import { Ionicons } from '@expo/vector-icons';
-import Constants from 'expo-constants';
+import React, { useContext, useEffect, useState, useCallback, useRef } from 'react';
+import { SafeAreaFrameContext, SafeAreaInsetsContext } from 'react-native-safe-area-context';
+import {
+  View,
+  Text,
+  StyleSheet,
+  ScrollView,
+  Pressable,
+  FlatList,
+  RefreshControl,
+  KeyboardAvoidingView,
+  Keyboard,
+  Platform,
+  Dimensions,
+} from 'react-native';
 import type { BottomTabScreenProps } from '@react-navigation/bottom-tabs';
 import type { CompositeScreenProps } from '@react-navigation/native';
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
@@ -15,9 +26,10 @@ import { useRecentlyViewed } from '../store/recentlyViewedStore';
 import { ProductCard } from '../components/ProductCard';
 import { HorizontalProducts } from '../components/HorizontalProducts';
 import { TrustStrip } from '../components/TrustStrip';
+import { ChatPanel, CHAT_BAND_PADDING } from '../components/chat/ChatPanel';
+import { CART_ENABLED } from '../config/features';
 import { analytics } from '../analytics';
 import { EV } from '../analytics/events';
-import { Loading, ErrorView } from '../components/Feedback';
 import { colors, spacing, radius, typography } from '../theme';
 
 type Props = CompositeScreenProps<
@@ -25,224 +37,284 @@ type Props = CompositeScreenProps<
   NativeStackScreenProps<RootStackParamList>
 >;
 
-const extra = (Constants.expoConfig?.extra ?? {}) as { currencySymbol?: string; envioGratisDesde?: number };
+/**
+ * Carga independiente de una sección del Home. Cada sección tiene su propio
+ * estado de carga y de error: si el catálogo falla, el chat (que no depende de
+ * esto) sigue usable y cada sección muestra su propio "Reintentar".
+ */
+function useSection<T>(loader: () => Promise<T>, initial: T) {
+  const [state, setState] = useState<{ data: T; loading: boolean; error: boolean }>({
+    data: initial,
+    loading: true,
+    error: false,
+  });
+  const loaderRef = useRef(loader);
+  loaderRef.current = loader;
+  const alive = useRef(true);
+  const seq = useRef(0);
 
-export function HomeScreen({ navigation }: Props) {
-  const [featured, setFeatured] = useState<Product[]>([]);
-  const [inmunidad, setInmunidad] = useState<Product[]>([]);
-  const [needs, setNeeds] = useState<Taxonomy[]>([]);
-  const [marcas, setMarcas] = useState<Taxonomy[]>([]);
-  const [query, setQuery] = useState('');
-  const [loading, setLoading] = useState(true);
-  const [refreshing, setRefreshing] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-  const add = useCart((s) => s.add);
-  const recent = useRecentlyViewed((s) => s.items);
-
-  const load = useCallback(async (isRefresh = false) => {
+  const reload = useCallback(async () => {
+    const id = ++seq.current;
+    setState((s) => ({ ...s, loading: true, error: false }));
     try {
-      if (isRefresh) setRefreshing(true);
-      else setLoading(true);
-      setError(null);
-      const [prods, inmun, taxos, brands] = await Promise.all([
-        fetchProducts({ perPage: 6, orderby: 'popularity' }),
-        fetchProducts({ necesidad: 'inmunidad', perPage: 10 }),
-        fetchNecesidades(),
-        fetchMarcas(),
-      ]);
-      setFeatured(prods.products);
-      setInmunidad(inmun.products);
-      setNeeds(taxos);
-      setMarcas(brands);
-    } catch (e: any) {
-      setError('No pudimos cargar la tienda. Revisa tu conexión.');
-    } finally {
-      setLoading(false);
-      setRefreshing(false);
+      const data = await loaderRef.current();
+      if (alive.current && id === seq.current) setState({ data, loading: false, error: false });
+    } catch {
+      if (alive.current && id === seq.current) setState((s) => ({ ...s, loading: false, error: true }));
     }
   }, []);
 
   useEffect(() => {
-    load();
-  }, [load]);
+    alive.current = true;
+    reload();
+    return () => {
+      alive.current = false;
+    };
+  }, [reload]);
 
-  const openProduct = (p: Product) => navigation.navigate('ProductDetail', { id: p.id, name: p.name });
-  const submitSearch = () => {
-    const q = query.trim();
-    if (q) {
-      analytics.track(EV.SEARCH, { query: q, source: 'home' });
-      navigation.navigate('Catalogo', { q });
-    }
+  return { ...state, reload };
+}
+
+const loadFeatured = () => fetchProducts({ perPage: 6, orderby: 'popularity' }).then((r) => r.products);
+const loadInmunidad = () => fetchProducts({ necesidad: 'inmunidad', perPage: 10 }).then((r) => r.products);
+
+/** Título + estado de carga/error de una sección. Con datos, muestra el contenido. */
+function Section({
+  title,
+  loading,
+  error,
+  hasData,
+  onRetry,
+  children,
+}: {
+  title: string;
+  loading: boolean;
+  error: boolean;
+  hasData: boolean;
+  onRetry: () => void;
+  children: React.ReactNode;
+}) {
+  return (
+    <View>
+      <Text style={styles.sectionTitle}>{title}</Text>
+      {hasData ? (
+        children
+      ) : loading ? (
+        <Text style={styles.sectionMuted}>Cargando…</Text>
+      ) : error ? (
+        <View style={styles.sectionError}>
+          <Text style={styles.sectionErrorText}>No pudimos cargar esta sección.</Text>
+          <Pressable style={styles.retry} onPress={onRetry} accessibilityRole="button">
+            <Text style={styles.retryText}>Reintentar</Text>
+          </Pressable>
+        </View>
+      ) : null}
+    </View>
+  );
+}
+
+export function HomeScreen({ navigation }: Props) {
+  const featured = useSection<Product[]>(loadFeatured, []);
+  const inmunidad = useSection<Product[]>(loadInmunidad, []);
+  const needs = useSection<Taxonomy[]>(fetchNecesidades, []);
+  const marcas = useSection<Taxonomy[]>(fetchMarcas, []);
+  const [refreshing, setRefreshing] = useState(false);
+  const add = useCart((s) => s.add);
+  const recent = useRecentlyViewed((s) => s.items);
+
+  // Chat: bloque de alto fijo dentro del scroll del Home. Con el teclado abierto el alto es
+  //   borde superior del teclado − posición superior REAL de la tarjeta − margen inferior del bloque
+  // (sin pasar del alto normal). La posición de la tarjeta se mide con measureInWindow tras
+  // desplazar el Home, y el borde del teclado se deduce de su altura (ver `keyboardTop`).
+  const [chatHeight] = useState(() => Math.max(480, Math.round(Dimensions.get('window').height * 0.62)));
+  const [kb, setKb] = useState<{ height: number; screenY: number } | null>(null);
+  const [cardTop, setCardTop] = useState<number | null>(null);
+  const [kbOffset, setKbOffset] = useState(0);
+  const rootRef = useRef<View>(null);
+  const scrollRef = useRef<ScrollView>(null);
+  const chatWrapRef = useRef<View>(null);
+  const chatY = useRef(0);
+
+  // Alto de la ventana y inset inferior de las barras del sistema con el teclado CERRADO: son la base
+  // para ubicar el teclado aunque Android reduzca o no la ventana al abrirlo. Sin SafeAreaProvider (tests) se usa Dimensions.
+  const frame = useContext(SafeAreaFrameContext);
+  const insets = useContext(SafeAreaInsetsContext);
+  const windowH = useRef(0);
+  const barBottom = useRef(0);
+  if (!kb) {
+    windowH.current = Math.max(windowH.current, frame?.height ?? Dimensions.get('window').height);
+    barBottom.current = insets?.bottom ?? 0;
+  }
+
+  /**
+   * Borde superior del teclado en coordenadas de ventana. `endCoordinates.screenY` de React Native en Android
+   * es el borde inferior del área visible (ReactRootView.java): solo coincide con el teclado si la ventana se
+   * reduce; con edge-to-edge (Android 15) la ventana no se reduce y screenY queda abajo de todo. Por eso se
+   * calcula con la altura del teclado (que RN da sin la barra de navegación) y se toma el menor de los dos.
+   */
+  const keyboardTop = kb
+    ? Math.min(kb.screenY > 0 ? kb.screenY : Infinity, windowH.current - kb.height - barBottom.current)
+    : 0;
+
+  // La posición de la tarjeta debe estar en el MISMO sistema que `keyboardTop` (coordenadas de la vista raíz de React).
+  // `measureInWindow` NO lo está: en RN 0.81 (Fabric) suma el desplazamiento del viewport, que es
+  // (posición de la raíz en pantalla − borde superior del área visible) = −altura de la barra de estado con edge-to-edge,
+  // así que da la posición real menos la barra de estado. `measure` (pageY) no suma ese desplazamiento.
+  const measureChat = useCallback(() => {
+    chatWrapRef.current?.measure((_x, _y, _w, _h, _pageX, pageY) => {
+      chatWrapRef.current?.measureInWindow((_wx, winY) => {
+        const top = Number.isFinite(pageY) ? pageY : winY; // respaldo si pageY no viniera
+        setCardTop(top + CHAT_BAND_PADDING);
+      });
+    });
+  }, []);
+
+  useEffect(() => {
+    const show = Keyboard.addListener('keyboardDidShow', (e) => {
+      setKb({ height: e.endCoordinates.height, screenY: e.endCoordinates.screenY });
+    });
+    const hide = Keyboard.addListener('keyboardDidHide', () => {
+      setKb(null);
+      setCardTop(null);
+    });
+    return () => {
+      show.remove();
+      hide.remove();
+    };
+  }, []);
+
+  // Con el teclado abierto: el encabezado del chat sube al borde superior visible y se mide dónde quedó la tarjeta.
+  // Se vuelve a medir tras asentarse el layout (el alto de la tarjeta cambia el contenido del scroll).
+  useEffect(() => {
+    if (!kb) return;
+    scrollRef.current?.scrollTo({ y: Math.max(0, chatY.current), animated: false });
+    const t1 = setTimeout(measureChat, 60);
+    const t2 = setTimeout(measureChat, 400);
+    return () => {
+      clearTimeout(t1);
+      clearTimeout(t2);
+    };
+  }, [kb, measureChat]);
+
+  const effectiveChatHeight =
+    kb && cardTop !== null
+      ? Math.min(chatHeight, Math.max(0, Math.round(keyboardTop - cardTop - CHAT_BAND_PADDING)))
+      : chatHeight;
+
+  const refreshAll = async () => {
+    setRefreshing(true);
+    await Promise.allSettled([featured.reload(), inmunidad.reload(), needs.reload(), marcas.reload()]);
+    setRefreshing(false);
   };
 
-  if (loading) return <Loading label="Cargando productos…" />;
-  if (error) return <ErrorView message={error} onRetry={() => load()} />;
+  const openProduct = (p: Product) => navigation.navigate('ProductDetail', { id: p.id, name: p.name });
 
   return (
-    <ScrollView
-      style={styles.container}
-      contentContainerStyle={{ paddingBottom: spacing.xxl }}
-      keyboardShouldPersistTaps="handled"
-      refreshControl={
-        <RefreshControl refreshing={refreshing} onRefresh={() => load(true)} colors={[colors.primary]} tintColor={colors.primary} />
-      }
+    <View
+      ref={rootRef}
+      style={styles.root}
+      onLayout={() => rootRef.current?.measureInWindow((_x, y) => setKbOffset(y))}
     >
-      {/* Buscador */}
-      <View style={styles.searchWrap}>
-        <View style={styles.searchBar}>
-          <Ionicons name="search" size={18} color={colors.textMuted} />
-          <TextInput
-            style={styles.searchInput}
-            placeholder="Buscar vitaminas, marcas…"
-            placeholderTextColor={colors.textMuted}
-            value={query}
-            onChangeText={setQuery}
-            returnKeyType="search"
-            onSubmitEditing={submitSearch}
-          />
-          {query.length > 0 && (
-            <Pressable onPress={() => setQuery('')} hitSlop={8} accessibilityRole="button" accessibilityLabel="Borrar búsqueda">
-              <Ionicons name="close-circle" size={18} color={colors.textMuted} />
-            </Pressable>
+      <KeyboardAvoidingView
+        style={styles.root}
+        behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+        keyboardVerticalOffset={kbOffset}
+      >
+        <ScrollView
+          ref={scrollRef}
+          style={styles.container}
+          contentContainerStyle={{ paddingBottom: spacing.xxl }}
+          keyboardShouldPersistTaps="handled"
+          onMomentumScrollEnd={kb ? measureChat : undefined}
+          onScrollEndDrag={kb ? measureChat : undefined}
+          refreshControl={
+            <RefreshControl refreshing={refreshing} onRefresh={refreshAll} colors={[colors.primary]} tintColor={colors.primary} />
+          }
+        >
+          {/* Chat con IA: primera vista del Home, independiente de la carga del catálogo. El buscador vive en el Catálogo. */}
+          <View ref={chatWrapRef} collapsable={false} onLayout={(e) => (chatY.current = e.nativeEvent.layout.y)}>
+            <ChatPanel height={effectiveChatHeight} />
+          </View>
+
+          {/* Señales de confianza (solo las que siguen siendo ciertas sin pago ni envío) */}
+          <TrustStrip />
+
+          {/* Categorías */}
+          <Section title="¿Qué necesitas?" loading={needs.loading} error={needs.error} hasData={needs.data.length > 0} onRetry={needs.reload}>
+            <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.chips}>
+              {needs.data.map((n) => (
+                <Pressable
+                  key={n.id}
+                  style={styles.chip}
+                  onPress={() => {
+                    analytics.track(EV.VIEW_CATEGORY, { necesidad: n.slug, name: n.name });
+                    navigation.navigate('Catalogo', { necesidad: n.slug });
+                  }}
+                >
+                  <Text style={styles.chipText}>{n.name}</Text>
+                </Pressable>
+              ))}
+            </ScrollView>
+          </Section>
+
+          {/* Más vendidos */}
+          <Section title="Más vendidos" loading={featured.loading} error={featured.error} hasData={featured.data.length > 0} onRetry={featured.reload}>
+            <FlatList
+              data={featured.data}
+              keyExtractor={(p) => String(p.id)}
+              numColumns={2}
+              scrollEnabled={false}
+              contentContainerStyle={{ paddingHorizontal: spacing.sm }}
+              renderItem={({ item }) => (
+                <ProductCard product={item} onPress={() => openProduct(item)} onAdd={CART_ENABLED ? () => add(item) : undefined} />
+              )}
+            />
+          </Section>
+
+          {/* Curado por necesidad */}
+          {inmunidad.data.length > 0 ? (
+            <HorizontalProducts title="Para tu inmunidad" products={inmunidad.data} onOpen={openProduct} />
+          ) : (
+            <Section title="Para tu inmunidad" loading={inmunidad.loading} error={inmunidad.error} hasData={false} onRetry={inmunidad.reload}>
+              {null}
+            </Section>
           )}
-        </View>
-      </View>
 
-      {/* Hero con CTA */}
-      <View style={styles.hero}>
-        <Text style={styles.heroTitle}>Te llevamos a la cima</Text>
-        {/* Sin "en Lima" (ver M9 en boticuy-hallazgos-completo.md): el envío
-            gratis por umbral solo existe hoy en una zona real, no en toda
-            Lima ni en provincias. */}
-        <Text style={styles.heroSub}>Vitaminas y suplementos con envío gratis desde {extra.currencySymbol ?? 'S/'}{extra.envioGratisDesde ?? 69} en zonas seleccionadas</Text>
-        <Pressable style={styles.heroCta} onPress={() => navigation.navigate('Catalogo')}>
-          <Text style={styles.heroCtaText}>Explorar catálogo</Text>
-          <Ionicons name="arrow-forward" size={16} color={colors.primary} />
-        </Pressable>
-      </View>
+          {/* Vistos recientemente */}
+          {recent.length > 0 && <HorizontalProducts title="Vistos recientemente" products={recent} onOpen={openProduct} />}
 
-      {/* Señales de confianza */}
-      <TrustStrip />
-
-      {/* Apoya a tu creador */}
-      <Pressable style={styles.creatorBanner} onPress={() => navigation.navigate('Creators')}>
-        <Ionicons name="heart-circle" size={30} color={colors.white} />
-        <View style={{ flex: 1 }}>
-          <Text style={styles.creatorTitle}>Apoya a tu creador favorito</Text>
-          <Text style={styles.creatorSub}>Usa su código y obtén descuento 💜</Text>
-        </View>
-        <Ionicons name="chevron-forward" size={20} color={colors.white} />
-      </Pressable>
-
-      {/* Categorías */}
-      <Text style={styles.sectionTitle}>¿Qué necesitas?</Text>
-      <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.chips}>
-        {needs.map((n) => (
-          <Pressable
-            key={n.id}
-            style={styles.chip}
-            onPress={() => {
-              analytics.track(EV.VIEW_CATEGORY, { necesidad: n.slug, name: n.name });
-              navigation.navigate('Catalogo', { necesidad: n.slug });
-            }}
-          >
-            <Text style={styles.chipText}>{n.name}</Text>
-          </Pressable>
-        ))}
-      </ScrollView>
-
-      {/* Más vendidos */}
-      <Text style={styles.sectionTitle}>Más vendidos</Text>
-      <FlatList
-        data={featured}
-        keyExtractor={(p) => String(p.id)}
-        numColumns={2}
-        scrollEnabled={false}
-        contentContainerStyle={{ paddingHorizontal: spacing.sm }}
-        renderItem={({ item }) => (
-          <ProductCard product={item} onPress={() => openProduct(item)} onAdd={() => add(item)} />
-        )}
-      />
-
-      {/* Curado por necesidad */}
-      <HorizontalProducts title="Para tu inmunidad" products={inmunidad} onOpen={openProduct} />
-
-      {/* Vistos recientemente */}
-      {recent.length > 0 && (
-        <HorizontalProducts title="Vistos recientemente" products={recent} onOpen={openProduct} />
-      )}
-
-      {/* Marcas */}
-      {marcas.length > 0 && (
-        <>
-          <Text style={styles.sectionTitle}>Marcas</Text>
-          <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.chips}>
-            {marcas.map((m) => (
-              <Pressable
-                key={m.id}
-                style={styles.marcaChip}
-                onPress={() => {
-                  analytics.track(EV.VIEW_BRAND, { marca: m.slug, name: m.name });
-                  navigation.navigate('Catalogo', { marca: m.slug });
-                }}
-              >
-                <Text style={styles.marcaChipText}>{m.name}</Text>
-              </Pressable>
-            ))}
-          </ScrollView>
-        </>
-      )}
-    </ScrollView>
+          {/* Marcas */}
+          <Section title="Marcas" loading={marcas.loading} error={marcas.error} hasData={marcas.data.length > 0} onRetry={marcas.reload}>
+            <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.chips}>
+              {marcas.data.map((m) => (
+                <Pressable
+                  key={m.id}
+                  style={styles.marcaChip}
+                  onPress={() => {
+                    analytics.track(EV.VIEW_BRAND, { marca: m.slug, name: m.name });
+                    navigation.navigate('Catalogo', { marca: m.slug });
+                  }}
+                >
+                  <Text style={styles.marcaChipText}>{m.name}</Text>
+                </Pressable>
+              ))}
+            </ScrollView>
+          </Section>
+        </ScrollView>
+      </KeyboardAvoidingView>
+    </View>
   );
 }
 
 const styles = StyleSheet.create({
+  root: { flex: 1 },
   container: { flex: 1, backgroundColor: colors.surface },
-  searchWrap: { padding: spacing.md, backgroundColor: colors.surface },
-  searchBar: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: spacing.sm,
-    backgroundColor: colors.white,
-    paddingHorizontal: spacing.md,
-    borderRadius: radius.pill,
-    borderWidth: 1,
-    borderColor: colors.border,
-  },
-  searchInput: { flex: 1, paddingVertical: 11, color: colors.text },
-  hero: {
-    backgroundColor: colors.primary,
-    padding: spacing.xl,
-    marginHorizontal: spacing.md,
-    borderRadius: radius.lg,
-  },
-  heroTitle: { color: colors.white, fontSize: 24, fontWeight: '800' },
-  heroSub: { color: colors.white, opacity: 0.9, marginTop: 4, lineHeight: 20 },
-  heroCta: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
-    alignSelf: 'flex-start',
-    backgroundColor: colors.white,
-    borderRadius: radius.pill,
-    paddingHorizontal: spacing.lg,
-    paddingVertical: 10,
-    marginTop: spacing.md,
-  },
-  heroCtaText: { color: colors.primary, fontWeight: '800' },
-  creatorBanner: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: spacing.md,
-    backgroundColor: colors.primaryDark,
-    marginHorizontal: spacing.md,
-    marginTop: spacing.lg,
-    padding: spacing.lg,
-    borderRadius: radius.md,
-  },
-  creatorTitle: { color: colors.white, fontWeight: '800', fontSize: 15 },
-  creatorSub: { color: colors.white, opacity: 0.85, fontSize: 12, marginTop: 2 },
   sectionTitle: { ...typography.h2, marginTop: spacing.xl, marginHorizontal: spacing.lg },
+  sectionMuted: { marginHorizontal: spacing.lg, marginTop: spacing.sm, color: colors.textMuted, fontSize: 14 },
+  sectionError: { marginHorizontal: spacing.lg, marginTop: spacing.sm, gap: spacing.sm, alignItems: 'flex-start' },
+  sectionErrorText: { color: colors.error, fontSize: 14 },
+  retry: { backgroundColor: colors.primary, paddingHorizontal: 16, paddingVertical: 8, borderRadius: 999 },
+  retryText: { color: colors.white, fontWeight: '700' },
   chips: { paddingHorizontal: spacing.lg, paddingVertical: spacing.md, gap: spacing.sm },
   chip: {
     backgroundColor: colors.white,

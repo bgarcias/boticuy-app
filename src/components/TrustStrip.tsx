@@ -2,8 +2,12 @@ import React from 'react';
 import { View, Text, StyleSheet } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { colors, spacing, radius } from '../theme';
+import { PURCHASE_ENABLED } from '../config/features';
 
-const ITEMS: { icon: keyof typeof Ionicons.glyphMap; label: string }[] = [
+type Item = { icon: keyof typeof Ionicons.glyphMap; label: string };
+
+// Con compra (PURCHASE_ENABLED), las cuatro frases originales.
+const ITEMS_PURCHASE: Item[] = [
   // Sin "en Lima" (ver M9 en boticuy-hallazgos-completo.md): el envío gratis
   // por umbral solo existe hoy en una zona real, no en toda Lima ni en
   // provincias — ver FreeShippingBar.tsx para el detalle completo del fix.
@@ -12,6 +16,15 @@ const ITEMS: { icon: keyof typeof Ionicons.glyphMap; label: string }[] = [
   { icon: 'ribbon-outline', label: 'Productos\noriginales' },
   { icon: 'logo-whatsapp', label: 'Asesoría\npor WhatsApp' },
 ];
+
+// Sin compra: solo las frases que siguen siendo ciertas sin pago ni envío
+// ("Envío gratis disponible" y "Pago seguro" se retiran: el app no cobra ni envía).
+const ITEMS_WEB: Item[] = [
+  { icon: 'ribbon-outline', label: 'Productos\noriginales' },
+  { icon: 'logo-whatsapp', label: 'Asesoría\npor WhatsApp' },
+];
+
+const ITEMS = PURCHASE_ENABLED ? ITEMS_PURCHASE : ITEMS_WEB;
 
 /** Fila de señales de confianza — clave en salud/farmacia. */
 export function TrustStrip() {

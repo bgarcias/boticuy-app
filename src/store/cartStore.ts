@@ -3,6 +3,8 @@ import { persist, createJSONStorage } from 'zustand/middleware';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import type { CartItem, Product, AppliedCoupon } from '../types';
 import { priceToSoles } from '../utils/format';
+import { getProductoNoVendible } from '../constants/productosNoVendibles';
+import { PURCHASE_ENABLED } from '../config/features';
 
 interface CartState {
   items: CartItem[];
@@ -27,6 +29,8 @@ export const useCart = create<CartState>()(
 
       add: (product, qty = 1) =>
         set((state) => {
+          // Los productos que no se venden por el app (p. ej. el de drflu.pe) nunca entran al carrito.
+          if (getProductoNoVendible(product.sku)) return state;
           // Mismo dato y mismo criterio que el tope del selector en
           // ProductDetailScreen: low_stock_remaining es la única cantidad exacta
           // que da la Store API; si es null, WooCommerce no reporta stock bajo y
@@ -54,20 +58,25 @@ export const useCart = create<CartState>()(
           return { items: [...state.items, item] };
         }),
 
+      // Si el carrito queda vacío, el cupón también se limpia (no queda un código suelto).
       remove: (productId) =>
-        set((state) => ({ items: state.items.filter((i) => i.productId !== productId) })),
+        set((state) => {
+          const items = state.items.filter((i) => i.productId !== productId);
+          return { items, coupon: items.length === 0 ? null : state.coupon };
+        }),
 
       setQty: (productId, qty) =>
-        set((state) => ({
-          items:
+        set((state) => {
+          const items =
             qty <= 0
               ? state.items.filter((i) => i.productId !== productId)
               : state.items.map((i) => {
                   if (i.productId !== productId) return i;
                   const capped = i.stockLimit != null ? Math.min(qty, i.stockLimit) : qty;
                   return { ...i, quantity: capped };
-                }),
-        })),
+                });
+          return { items, coupon: items.length === 0 ? null : state.coupon };
+        }),
 
       // Actualiza el precio congelado de un ítem cuando la revalidación (ver
       // src/utils/cartRevalidation.ts, hallazgo A7) detecta que cambió del
@@ -100,7 +109,12 @@ export const useCart = create<CartState>()(
     {
       name: 'boticuy-cart',
       storage: createJSONStorage(() => AsyncStorage),
-      partialize: (s) => ({ items: s.items, coupon: s.coupon }),
+      // Con PURCHASE_ENABLED (flujo original con compra) el cupón se guarda en disco, como antes.
+      // En modo web (sin PURCHASE_ENABLED) NO: no sobrevive al cierre del app.
+      partialize: (s) => (PURCHASE_ENABLED ? { items: s.items, coupon: s.coupon } : { items: s.items }),
+      // En modo web además se descarta cualquier cupón que versiones anteriores ya hubieran persistido.
+      merge: (persisted, current) =>
+        PURCHASE_ENABLED ? { ...current, ...(persisted as object) } : { ...current, ...(persisted as object), coupon: null },
     }
   )
 );

@@ -89,3 +89,20 @@ describe('cartStore', () => {
     expect(useCart.getState().items[0].quantity).toBe(3);
   });
 });
+
+describe('productos no vendibles', () => {
+  it('el producto no vendible (SKU 1400006, drflu.pe) nunca entra al carrito', () => {
+    useCart.getState().clear();
+    const base = {
+      id: 99,
+      name: 'Dr. Flu',
+      prices: { price: '1000', currency_minor_unit: 2 },
+      images: [],
+      sku: '1400006',
+    } as unknown as Product;
+    useCart.getState().add(base, 2);
+    expect(useCart.getState().items).toHaveLength(0);
+    useCart.getState().add({ ...base, id: 100, sku: 'OTRO' } as Product, 1);
+    expect(useCart.getState().items).toHaveLength(1);
+  });
+});

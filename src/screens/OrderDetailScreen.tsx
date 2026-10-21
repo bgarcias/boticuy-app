@@ -67,7 +67,7 @@ export function OrderDetailScreen({ route, navigation }: Props) {
       } else {
         showToast('Productos agregados al carrito');
       }
-      if (added > 0) navigation.navigate('Tabs', { screen: 'Carrito' } as never);
+      if (added > 0) navigation.navigate('Tabs', { screen: 'Carrito' });
     } catch {
       // Falló la petición completa (red/timeout/500): ante la duda, no se toca
       // el carrito (mismo criterio que revalidateCart(), ver A1).

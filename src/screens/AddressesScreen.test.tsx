@@ -8,6 +8,10 @@ import { useAuth } from '../store/authStore';
 import * as addressesApi from '../api/addresses';
 import type { SavedAddress } from '../types';
 
+// Estos tests cubren flujos de compra/cuenta que el modo sin compra desactiva por defecto:
+// se fija el flag encendido para seguir probándolos (ver src/config/features.ts).
+jest.mock('../config/features', () => ({ PURCHASE_ENABLED: true }));
+
 // AddressesScreen usa useFocusEffect solo para recargar al recibir foco — en
 // este test no hay NavigationContainer real, así que se reemplaza por un
 // simple efecto en el montaje (mismo timing que nos interesa: "al abrir").

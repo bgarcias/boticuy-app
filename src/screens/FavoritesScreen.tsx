@@ -6,6 +6,7 @@ import type { NativeStackScreenProps } from '@react-navigation/native-stack';
 import type { RootStackParamList } from '../navigation/types';
 import { useFavorites } from '../store/favoritesStore';
 import { useCart } from '../store/cartStore';
+import { CART_ENABLED } from '../config/features';
 import { ProductCard } from '../components/ProductCard';
 import { colors, spacing } from '../theme';
 
@@ -36,7 +37,7 @@ export function FavoritesScreen({ navigation }: Props) {
         <ProductCard
           product={item}
           onPress={() => navigation.navigate('ProductDetail', { id: item.id, name: item.name })}
-          onAdd={() => add(item)}
+          onAdd={CART_ENABLED ? () => add(item) : undefined}
         />
       )}
     />

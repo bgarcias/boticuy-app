@@ -13,4 +13,6 @@ export const EV = {
   BEGIN_CHECKOUT: 'begin_checkout',
   CHECKOUT_SUBMITTED: 'checkout_submitted',
   CONTACT_WHATSAPP: 'contact_whatsapp',
+  /** Se abrió en el navegador el carrito web armado desde el app (solo ids y cantidades, sin datos personales). */
+  WEB_CART_OPEN: 'web_cart_open',
 } as const;

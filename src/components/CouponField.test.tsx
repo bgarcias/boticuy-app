@@ -6,6 +6,10 @@ import { CouponField } from './CouponField';
 import { useCart } from '../store/cartStore';
 import * as couponsApi from '../api/coupons';
 
+// Estos tests cubren flujos de compra/cuenta que el modo sin compra desactiva por defecto:
+// se fija el flag encendido para seguir probándolos (ver src/config/features.ts).
+jest.mock('../config/features', () => ({ PURCHASE_ENABLED: true }));
+
 jest.mock('../api/coupons');
 
 const mockedValidateCoupon = couponsApi.validateCoupon as jest.Mock;

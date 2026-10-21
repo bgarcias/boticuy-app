@@ -1,7 +1,9 @@
 import { bffClient } from './client';
 import type { SavedAddress } from '../types';
+import { assertPurchaseEnabled } from './guard';
 
 export async function fetchAddresses(): Promise<SavedAddress[]> {
+  assertPurchaseEnabled();
   const res = await bffClient.get<{ ok: boolean; addresses: SavedAddress[] }>('/addresses');
   return res.data?.addresses ?? [];
 }
@@ -21,16 +23,19 @@ function unwrapAddresses(res: { data?: { ok?: boolean; reason?: string; addresse
 }
 
 export async function addAddress(addr: Omit<SavedAddress, 'id'>): Promise<SavedAddress[]> {
+  assertPurchaseEnabled();
   const res = await bffClient.post<{ ok: boolean; reason?: string; addresses: SavedAddress[] }>('/addresses', addr);
   return unwrapAddresses(res);
 }
 
 export async function updateAddress(id: string, addr: Omit<SavedAddress, 'id'>): Promise<SavedAddress[]> {
+  assertPurchaseEnabled();
   const res = await bffClient.post<{ ok: boolean; reason?: string; addresses: SavedAddress[] }>('/addresses/update', { id, ...addr });
   return unwrapAddresses(res);
 }
 
 export async function deleteAddress(id: string): Promise<SavedAddress[]> {
+  assertPurchaseEnabled();
   const res = await bffClient.post<{ ok: boolean; addresses: SavedAddress[] }>('/addresses/delete', { id });
   return res.data?.addresses ?? [];
 }

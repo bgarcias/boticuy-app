@@ -10,6 +10,7 @@ import type { Product, Taxonomy } from '../types';
 import { fetchProducts } from '../api/products';
 import { fetchNecesidades, fetchMarcas } from '../api/taxonomies';
 import { useCart } from '../store/cartStore';
+import { CART_ENABLED } from '../config/features';
 import { useRecentSearches } from '../store/recentSearchesStore';
 import { ProductCard } from '../components/ProductCard';
 import { ProductGridSkeleton } from '../components/Skeleton';
@@ -217,7 +218,7 @@ export function CatalogScreen({ navigation, route }: Props) {
             <ProductCard
               product={item}
               onPress={() => navigation.navigate('ProductDetail', { id: item.id, name: item.name })}
-              onAdd={() => add(item)}
+              onAdd={CART_ENABLED ? () => add(item) : undefined}
             />
           )}
         />

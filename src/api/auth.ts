@@ -1,5 +1,6 @@
 import { bffClient } from './client';
 import type { AuthUser } from '../types';
+import { assertPurchaseEnabled } from './guard';
 
 interface AuthResult {
   ok: boolean;
@@ -9,11 +10,13 @@ interface AuthResult {
 }
 
 export async function registerUser(email: string, password: string, nombre: string): Promise<AuthResult> {
+  assertPurchaseEnabled();
   const res = await bffClient.post<AuthResult>('/auth/register', { email, password, nombre });
   return res.data;
 }
 
 export async function loginUser(email: string, password: string): Promise<AuthResult> {
+  assertPurchaseEnabled();
   const res = await bffClient.post<AuthResult>('/auth/login', { email, password });
   return res.data;
 }
@@ -24,6 +27,7 @@ export async function loginUser(email: string, password: string): Promise<AuthRe
  * otros 7 días de vida. `ok:false` con 401 si el token ya no es válido/expiró.
  */
 export async function refreshSession(): Promise<AuthResult> {
+  assertPurchaseEnabled();
   const res = await bffClient.post<AuthResult>('/auth/refresh');
   return res.data;
 }
@@ -37,6 +41,7 @@ export async function refreshSession(): Promise<AuthResult> {
  * sesión localmente.
  */
 export async function logoutSession(): Promise<{ ok: boolean }> {
+  assertPurchaseEnabled();
   const res = await bffClient.post<{ ok: boolean }>('/auth/logout');
   return res.data;
 }

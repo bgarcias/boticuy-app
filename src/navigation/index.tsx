@@ -10,11 +10,13 @@ import type { RootStackParamList, TabParamList } from './types';
 import { analytics } from '../analytics';
 import { colors } from '../theme';
 import { useCart } from '../store/cartStore';
+import { PURCHASE_ENABLED, CART_ENABLED, CREATORS_ENABLED, COUPONS_ENABLED } from '../config/features';
 import { OnboardingScreen, ONBOARDING_KEY } from '../screens/OnboardingScreen';
 import { HomeScreen } from '../screens/HomeScreen';
 import { CatalogScreen } from '../screens/CatalogScreen';
 import { ProductDetailScreen } from '../screens/ProductDetailScreen';
 import { CartScreen } from '../screens/CartScreen';
+import { WebCartScreen } from '../screens/WebCartScreen';
 import { ProfileScreen } from '../screens/ProfileScreen';
 import { LoginScreen } from '../screens/LoginScreen';
 import { ForgotPasswordScreen } from '../screens/ForgotPasswordScreen';
@@ -79,20 +81,23 @@ function Tabs() {
         }}
       />
       <Tab.Screen name="Catalogo" component={CatalogScreen} options={{ title: 'Catálogo' }} />
-      <Tab.Screen
-        name="Carrito"
-        component={CartScreen}
-        options={{
-          title: 'Carrito',
-          tabBarIcon: ({ color, size }) => (
-            <View>
-              <Ionicons name="cart" size={size} color={color} />
-              <CartBadge />
-            </View>
-          ),
-        }}
-      />
-      <Tab.Screen name="Perfil" component={ProfileScreen} options={{ title: 'Mi cuenta' }} />
+      {/* Tab Carrito: con compra, el CartScreen de siempre; sin compra, el carrito que termina en la web. Apagado con CART_ENABLED=false (ver config/features.ts). */}
+      {CART_ENABLED ? (
+        <Tab.Screen
+          name="Carrito"
+          component={PURCHASE_ENABLED ? CartScreen : WebCartScreen}
+          options={{
+            title: 'Carrito',
+            tabBarIcon: ({ color, size }) => (
+              <View>
+                <Ionicons name="cart" size={size} color={color} />
+                <CartBadge />
+              </View>
+            ),
+          }}
+        />
+      ) : null}
+      <Tab.Screen name="Perfil" component={ProfileScreen} options={{ title: PURCHASE_ENABLED ? 'Mi cuenta' : 'Perfil' }} />
     </Tab.Navigator>
   );
 }
@@ -137,27 +142,38 @@ export function RootNavigator() {
           component={ProductDetailScreen}
           options={({ route }) => ({ title: route.params?.name ?? 'Producto' })}
         />
-        <Stack.Screen name="Login" component={LoginScreen} options={{ title: 'Mi cuenta' }} />
-        <Stack.Screen name="ForgotPassword" component={ForgotPasswordScreen} options={{ title: 'Recuperar contraseña' }} />
-        <Stack.Screen name="Checkout" component={CheckoutScreen} options={{ title: 'Finalizar compra' }} />
-        <Stack.Screen
-          name="OrderConfirmation"
-          component={OrderConfirmationScreen}
-          options={{ title: 'Confirmación', headerBackVisible: false, gestureEnabled: false }}
-        />
-        <Stack.Screen name="Addresses" component={AddressesScreen} options={{ title: 'Mis direcciones' }} />
-        <Stack.Screen
-          name="AddressForm"
-          component={AddressFormScreen}
-          options={({ route }) => ({ title: route.params?.address ? 'Editar dirección' : 'Agregar dirección' })}
-        />
-        <Stack.Screen name="Orders" component={OrdersScreen} options={{ title: 'Mis pedidos' }} />
-        <Stack.Screen name="OrderDetail" component={OrderDetailScreen} options={{ title: 'Detalle del pedido' }} />
-        <Stack.Screen name="Points" component={PointsScreen} options={{ title: 'Mis puntos' }} />
-        <Stack.Screen name="Creators" component={CreatorsScreen} options={{ title: 'Apoya a tu creador' }} />
-        <Stack.Screen name="MyCoupons" component={MyCouponsScreen} options={{ title: 'Mis cupones' }} />
         <Stack.Screen name="Favorites" component={FavoritesScreen} options={{ title: 'Mis favoritos' }} />
-        <Stack.Screen name="PaymentWebView" component={PaymentWebViewScreen} options={{ title: 'Pago seguro' }} />
+        {/* Apoya a tu creador: sin cuenta, solo GET /apoya-creador (ver CREATORS_ENABLED). */}
+        {CREATORS_ENABLED ? (
+          <Stack.Screen name="Creators" component={CreatorsScreen} options={{ title: 'Apoya a tu creador' }} />
+        ) : null}
+        {/* Mis cupones: sin cuenta, solo GET /mis-cupones (ver COUPONS_ENABLED). */}
+        {COUPONS_ENABLED ? (
+          <Stack.Screen name="MyCoupons" component={MyCouponsScreen} options={{ title: 'Mis cupones' }} />
+        ) : null}
+        {/* Sin compra: ni el carrito, ni el checkout, ni la cuenta existen en el stack (ver config/features.ts). */}
+        {PURCHASE_ENABLED ? (
+          <>
+            <Stack.Screen name="Login" component={LoginScreen} options={{ title: 'Mi cuenta' }} />
+            <Stack.Screen name="ForgotPassword" component={ForgotPasswordScreen} options={{ title: 'Recuperar contraseña' }} />
+            <Stack.Screen name="Checkout" component={CheckoutScreen} options={{ title: 'Finalizar compra' }} />
+            <Stack.Screen
+              name="OrderConfirmation"
+              component={OrderConfirmationScreen}
+              options={{ title: 'Confirmación', headerBackVisible: false, gestureEnabled: false }}
+            />
+            <Stack.Screen name="Addresses" component={AddressesScreen} options={{ title: 'Mis direcciones' }} />
+            <Stack.Screen
+              name="AddressForm"
+              component={AddressFormScreen}
+              options={({ route }) => ({ title: route.params?.address ? 'Editar dirección' : 'Agregar dirección' })}
+            />
+            <Stack.Screen name="Orders" component={OrdersScreen} options={{ title: 'Mis pedidos' }} />
+            <Stack.Screen name="OrderDetail" component={OrderDetailScreen} options={{ title: 'Detalle del pedido' }} />
+            <Stack.Screen name="Points" component={PointsScreen} options={{ title: 'Mis puntos' }} />
+            <Stack.Screen name="PaymentWebView" component={PaymentWebViewScreen} options={{ title: PURCHASE_ENABLED ? 'Pago seguro' : 'Pago con tarjeta' }} />
+          </>
+        ) : null}
       </Stack.Navigator>
     </NavigationContainer>
   );

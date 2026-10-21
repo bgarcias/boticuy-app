@@ -3,6 +3,7 @@ import { View, Text, StyleSheet, FlatList } from 'react-native';
 import type { Product } from '../types';
 import { ProductCard } from './ProductCard';
 import { useCart } from '../store/cartStore';
+import { CART_ENABLED } from '../config/features';
 import { colors, spacing, typography } from '../theme';
 
 interface Props {
@@ -25,7 +26,7 @@ export function HorizontalProducts({ title, products, onOpen }: Props) {
         showsHorizontalScrollIndicator={false}
         contentContainerStyle={styles.list}
         renderItem={({ item }) => (
-          <ProductCard horizontal product={item} onPress={() => onOpen(item)} onAdd={() => add(item)} />
+          <ProductCard horizontal product={item} onPress={() => onOpen(item)} onAdd={CART_ENABLED ? () => add(item) : undefined} />
         )}
       />
     </View>

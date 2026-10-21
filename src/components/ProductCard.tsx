@@ -11,6 +11,7 @@ import { EV } from '../analytics/events';
 import { priceToSoles } from '../utils/format';
 import { ExternalPurchaseNotice } from './ExternalPurchaseNotice';
 import { getProductoNoVendible } from '../constants/productosNoVendibles';
+import { CART_ENABLED } from '../config/features';
 import { colors, radius, spacing, shadow } from '../theme';
 
 export function ProductCard({
@@ -21,7 +22,8 @@ export function ProductCard({
 }: {
   product: Product;
   onPress: () => void;
-  onAdd: () => void;
+  /** Sin ella (o con el carrito apagado, CART_ENABLED) no hay botón Agregar. */
+  onAdd?: () => void;
   horizontal?: boolean;
 }) {
   const thumbnail = product.images?.[0]?.thumbnail;
@@ -36,8 +38,9 @@ export function ProductCard({
   const fav = useFavorites((s) => s.isFav(product.id));
   const toggleFav = useFavorites((s) => s.toggle);
   const showToast = useToast((s) => s.show);
+  const showAdd = CART_ENABLED && !!onAdd;
   const handleAdd = () => {
-    onAdd();
+    onAdd?.();
     if (product.is_in_stock) {
       showToast('Agregado al carrito');
       analytics.track(EV.ADD_TO_CART, { id: product.id, name: product.name, price: priceToSoles(product.prices), source: 'card' });
@@ -91,6 +94,9 @@ export function ProductCard({
       </View>
       {noVendible ? (
         <ExternalPurchaseNotice url={noVendible.url} compact />
+      ) : !showAdd ? (
+        // Sin compra: la tarjeta solo lleva a la ficha. La etiqueta de stock se mantiene.
+        !product.is_in_stock ? <Text style={styles.outOfStock}>Sin stock</Text> : null
       ) : (
         <Pressable
           style={[styles.addBtn, !product.is_in_stock && styles.addBtnOff]}
@@ -151,5 +157,6 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   addBtnOff: { backgroundColor: colors.textMuted },
+  outOfStock: { marginTop: spacing.sm, fontSize: 12, fontWeight: '700', color: colors.textMuted },
   addText: { color: colors.white, fontWeight: '700', fontSize: 13 },
 });

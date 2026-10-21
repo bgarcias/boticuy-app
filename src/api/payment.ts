@@ -1,4 +1,5 @@
 import { bffClient } from './client';
+import { assertPurchaseEnabled } from './guard';
 
 export interface FormTokenResult {
   ok: boolean;
@@ -24,6 +25,7 @@ export interface ValidateResult {
  * uid del Bearer y este campo se ignora, pero no está de más enviarlo siempre.
  */
 export async function getFormToken(orderId: number, checkoutToken?: string): Promise<FormTokenResult> {
+  assertPurchaseEnabled();
   const res = await bffClient.post<FormTokenResult>('/payment/formtoken', {
     order_id: orderId,
     checkout_token: checkoutToken,
@@ -42,6 +44,7 @@ export async function validatePayment(
   hash: string,
   checkoutToken?: string
 ): Promise<ValidateResult> {
+  assertPurchaseEnabled();
   const res = await bffClient.post<ValidateResult>('/payment/validate', {
     order_id: orderId,
     'kr-answer': answer,
@@ -59,5 +62,6 @@ export async function validatePayment(
  * 'pending' de tarjeta. Fire-and-forget desde el cliente, nunca bloquea la navegación.
  */
 export async function abandonPayment(orderId: number, checkoutToken?: string): Promise<void> {
+  assertPurchaseEnabled();
   await bffClient.post('/payment/abandon', { order_id: orderId, checkout_token: checkoutToken });
 }

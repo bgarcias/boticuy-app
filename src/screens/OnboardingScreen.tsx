@@ -8,6 +8,7 @@ import type { NativeStackScreenProps } from '@react-navigation/native-stack';
 
 import type { RootStackParamList } from '../navigation/types';
 import { colors, spacing, radius } from '../theme';
+import { PURCHASE_ENABLED } from '../config/features';
 
 type Props = NativeStackScreenProps<RootStackParamList, 'Onboarding'>;
 
@@ -16,10 +17,14 @@ export const ONBOARDING_KEY = 'boticuy-onboarded';
 
 const extra = (Constants.expoConfig?.extra ?? {}) as { currencySymbol?: string; envioGratisDesde?: number };
 
+type Slide = { icon: keyof typeof Ionicons.glyphMap; title: string; text: string };
+
 // Todo el contenido de esta pantalla es estático (definido acá mismo, no viene de
-// WordPress/WooCommerce), salvo el umbral de envío gratis que sale de app.config.js
+// WordPress/WooCommerce), salvo el umbral de envío gratis del modo con compra, que sale de app.config.js
 // (misma fuente que HomeScreen/ProductDetailScreen/FreeShippingBar) — no aplica decodeHtmlEntities.
-const SLIDES: { icon: keyof typeof Ionicons.glyphMap; title: string; text: string }[] = [
+// Dos juegos de textos, elegidos por PURCHASE_ENABLED (ver config/features.ts): el original (con compra)
+// y el de modo sin compra, sin promesas de pago ni de envío (el app no cobra ni envía, la compra se cierra en la web).
+const SLIDES_PURCHASE: Slide[] = [
   {
     icon: 'medkit',
     title: 'Tu botica de vitaminas',
@@ -39,6 +44,26 @@ const SLIDES: { icon: keyof typeof Ionicons.glyphMap; title: string; text: strin
     text: 'Yape, Plin o tarjeta. Y te acompañamos por WhatsApp en todo el proceso.',
   },
 ];
+
+const SLIDES_WEB: Slide[] = [
+  {
+    icon: 'medkit',
+    title: 'Tu botica de vitaminas',
+    text: 'Vitaminas y suplementos de marcas confiables. Explora el catálogo desde tu celular.',
+  },
+  {
+    icon: 'search',
+    title: 'Encuentra lo que necesitas',
+    text: 'Busca por producto, marca o necesidad y revisa el detalle de cada uno.',
+  },
+  {
+    icon: 'chatbubbles',
+    title: 'Asesoría cuando la necesites',
+    text: 'Pregúntale a Boticuy IA Agente o escríbenos por WhatsApp. Cuando quieras comprar, te llevamos a nuestra web.',
+  },
+];
+
+const SLIDES = PURCHASE_ENABLED ? SLIDES_PURCHASE : SLIDES_WEB;
 
 export function OnboardingScreen({ navigation }: Props) {
   const { width } = useWindowDimensions();

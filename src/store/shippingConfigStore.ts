@@ -3,6 +3,7 @@ import { persist, createJSONStorage } from 'zustand/middleware';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import Constants from 'expo-constants';
 import { fetchShippingConfig } from '../api/shipping';
+import { PURCHASE_ENABLED } from '../config/features';
 
 const extra = (Constants.expoConfig?.extra ?? {}) as { envioGratisDesdeNivel?: number };
 
@@ -22,6 +23,8 @@ export const useShippingConfig = create<ShippingConfigState>()(
     (set) => ({
       envioGratisDesdeNivel: extra.envioGratisDesdeNivel ?? 59,
       refresh: async () => {
+        // Modo sin compra: /shipping/config está cerrada en el servidor, no se llama.
+        if (!PURCHASE_ENABLED) return;
         try {
           const { envio_gratis_nivel } = await fetchShippingConfig();
           if (typeof envio_gratis_nivel === 'number' && envio_gratis_nivel > 0) {

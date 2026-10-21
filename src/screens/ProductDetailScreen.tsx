@@ -1,5 +1,5 @@
 import React, { useEffect, useState, useCallback } from 'react';
-import { View, Text, StyleSheet, ScrollView, Pressable, Share } from 'react-native';
+import { View, Text, StyleSheet, ScrollView, Pressable, Share, Linking } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import Constants from 'expo-constants';
@@ -24,11 +24,20 @@ import { ProductDetailSkeleton } from '../components/Skeleton';
 import { ExternalPurchaseNotice } from '../components/ExternalPurchaseNotice';
 import { getProductoNoVendible } from '../constants/productosNoVendibles';
 import { stripHtml, priceToSoles } from '../utils/format';
+import { buildStoreUrl } from '../utils/safeUrl';
+import { WEB_CART_MAX_QTY } from '../utils/webCart';
+import { STORE_URL_POLICY } from '../constants/storePolicy';
+import { PURCHASE_ENABLED, CART_ENABLED } from '../config/features';
 import { colors, spacing, radius } from '../theme';
 
 type Props = NativeStackScreenProps<RootStackParamList, 'ProductDetail'>;
 
 const appExtra = (Constants.expoConfig?.extra ?? {}) as { currencySymbol?: string; envioGratisDesde?: number };
+
+/** Cantidad máxima seleccionable: la menor entre el stock bajo reportado y el tope. */
+function selectableMax(p: Product, max: number): number {
+  return typeof p.low_stock_remaining === 'number' && p.low_stock_remaining > 0 ? Math.min(p.low_stock_remaining, max) : max;
+}
 
 function Section({ title, html }: { title: string; html: string }) {
   if (!html || !stripHtml(html).trim()) return null;
@@ -114,12 +123,27 @@ export function ProductDetailScreen({ route, navigation }: Props) {
   if (loading) return <ProductDetailSkeleton />;
   if (error || !product) return <ErrorView message={error ?? undefined} onRetry={load} />;
 
+  // Sin compra el carrito termina en la web: tope de unidades por producto igual al del plugin (class-web-cart.php).
+  const maxQty = PURCHASE_ENABLED ? Number.POSITIVE_INFINITY : WEB_CART_MAX_QTY;
+  const qtyCap = selectableMax(product, maxQty);
+
+  const onViewOnWeb = () => {
+    // "Ver en la web": solo se abre el permalink si pertenece a la tienda (https, dominio exacto; en builds
+    // que no son de producción también el host de staging por http); ver utils/safeUrl.ts.
+    const url = buildStoreUrl(product.permalink, STORE_URL_POLICY);
+    if (!url) {
+      showToast('No pudimos abrir la página del producto.');
+      return;
+    }
+    Linking.openURL(url).catch(() => showToast('No pudimos abrir la página del producto.'));
+  };
+
   const lowStock = typeof product.low_stock_remaining === 'number' && product.low_stock_remaining > 0;
   const noVendible = getProductoNoVendible(product.sku);
 
   return (
     <View style={styles.container}>
-      <ScrollView contentContainerStyle={{ paddingBottom: 120 }}>
+      <ScrollView contentContainerStyle={{ paddingBottom: 170 }}>
         <ImageGallery images={product.images} />
         <View style={styles.body}>
           {product.brands?.[0] && <Text style={styles.brand}>{product.brands[0].name}</Text>}
@@ -150,17 +174,22 @@ export function ProductDetailScreen({ route, navigation }: Props) {
               <Ionicons name="ribbon-outline" size={18} color={colors.primary} />
               <Text style={styles.trustText}>Producto original</Text>
             </View>
-            <View style={styles.trustItem}>
-              <Ionicons name="shield-checkmark-outline" size={18} color={colors.primary} />
-              <Text style={styles.trustText}>Pago seguro</Text>
-            </View>
-            <View style={styles.trustItem}>
-              <Ionicons name="bicycle-outline" size={18} color={colors.primary} />
-              {/* Sin "Lima" (ver M9 en boticuy-hallazgos-completo.md): el envío
-                  gratis por umbral solo existe hoy en una zona real, no en
-                  toda Lima ni en provincias. */}
-              <Text style={styles.trustText}>Envío gratis ≥ {appExtra.currencySymbol ?? 'S/'}{appExtra.envioGratisDesde ?? 69} en zonas seleccionadas</Text>
-            </View>
+            {/* Con compra: "Pago seguro" y "Envío gratis" originales. Sin compra no van: el app no cobra ni envía; la compra se cierra en la web. */}
+            {PURCHASE_ENABLED ? (
+              <>
+                <View style={styles.trustItem}>
+                  <Ionicons name="shield-checkmark-outline" size={18} color={colors.primary} />
+                  <Text style={styles.trustText}>Pago seguro</Text>
+                </View>
+                <View style={styles.trustItem}>
+                  <Ionicons name="bicycle-outline" size={18} color={colors.primary} />
+                  {/* Sin "Lima" (ver M9 en boticuy-hallazgos-completo.md): el envío
+                      gratis por umbral solo existe hoy en una zona real, no en
+                      toda Lima ni en provincias. */}
+                  <Text style={styles.trustText}>Envío gratis ≥ {appExtra.currencySymbol ?? 'S/'}{appExtra.envioGratisDesde ?? 69} en zonas seleccionadas</Text>
+                </View>
+              </>
+            ) : null}
           </View>
 
           <Section title="Beneficios" html={extra?.beneficios ?? ''} />
@@ -212,36 +241,54 @@ export function ProductDetailScreen({ route, navigation }: Props) {
       <View style={[styles.bottomBar, { paddingBottom: insets.bottom + spacing.md }]}>
         {noVendible ? (
           <ExternalPurchaseNotice url={noVendible.url} />
+        ) : !CART_ENABLED ? (
+          // Sin carrito (EXPO_PUBLIC_CART_ENABLED=false): solo se ve la página del producto en la web.
+          <Pressable
+            style={[styles.cta, !product.is_in_stock && styles.ctaOff]}
+            disabled={!product.is_in_stock}
+            onPress={onViewOnWeb}
+            accessibilityRole="button"
+            accessibilityLabel={product.is_in_stock ? 'Ver en la web' : 'Sin stock'}
+          >
+            <Text style={styles.ctaText}>{product.is_in_stock ? 'Ver en la web' : 'Sin stock'}</Text>
+          </Pressable>
         ) : (
           <>
-            <View style={styles.qty}>
-              <Pressable style={styles.qtyBtn} onPress={() => setQty((q) => Math.max(1, q - 1))} hitSlop={6} accessibilityRole="button" accessibilityLabel="Disminuir cantidad">
-                <Text style={styles.qtyBtnText}>-</Text>
-              </Pressable>
-              <Text style={styles.qtyNum} accessibilityLabel={`Cantidad ${qty}`}>{qty}</Text>
+            <View style={styles.actionRow}>
+              <View style={styles.qty}>
+                <Pressable style={styles.qtyBtn} onPress={() => setQty((q) => Math.max(1, q - 1))} hitSlop={6} accessibilityRole="button" accessibilityLabel="Disminuir cantidad">
+                  <Text style={styles.qtyBtnText}>-</Text>
+                </Pressable>
+                <Text style={styles.qtyNum} accessibilityLabel={`Cantidad ${qty}`}>{qty}</Text>
+                <Pressable
+                  style={styles.qtyBtn}
+                  onPress={() => setQty((q) => Math.min(qtyCap, q + 1))}
+                  disabled={qty >= qtyCap}
+                  hitSlop={6}
+                  accessibilityRole="button"
+                  accessibilityLabel="Aumentar cantidad"
+                >
+                  <Text style={[styles.qtyBtnText, qty >= qtyCap && styles.qtyBtnOff]}>+</Text>
+                </Pressable>
+              </View>
               <Pressable
-                style={styles.qtyBtn}
-                onPress={() => setQty((q) => (lowStock ? Math.min(product.low_stock_remaining!, q + 1) : q + 1))}
-                disabled={lowStock && qty >= product.low_stock_remaining!}
-                hitSlop={6}
-                accessibilityRole="button"
-                accessibilityLabel="Aumentar cantidad"
+                style={[styles.cta, !product.is_in_stock && styles.ctaOff]}
+                disabled={!product.is_in_stock}
+                onPress={() => {
+                  add(product, qty);
+                  showToast(qty > 1 ? `${qty} agregados al carrito` : 'Agregado al carrito');
+                  analytics.track(EV.ADD_TO_CART, { id: product.id, name: product.name, price: priceToSoles(product.prices), qty, source: 'detail' });
+                  navigation.goBack();
+                }}
               >
-                <Text style={styles.qtyBtnText}>+</Text>
+                <Text style={styles.ctaText}>{PURCHASE_ENABLED || product.is_in_stock ? 'Agregar al carrito' : 'Sin stock'}</Text>
               </Pressable>
             </View>
-            <Pressable
-              style={[styles.cta, !product.is_in_stock && styles.ctaOff]}
-              disabled={!product.is_in_stock}
-              onPress={() => {
-                add(product, qty);
-                showToast(qty > 1 ? `${qty} agregados al carrito` : 'Agregado al carrito');
-                analytics.track(EV.ADD_TO_CART, { id: product.id, name: product.name, price: priceToSoles(product.prices), qty, source: 'detail' });
-                navigation.goBack();
-              }}
-            >
-              <Text style={styles.ctaText}>Agregar al carrito</Text>
-            </Pressable>
+            {!PURCHASE_ENABLED ? (
+              <Pressable onPress={onViewOnWeb} hitSlop={8} accessibilityRole="link" accessibilityLabel="Ver en la web" style={styles.webLink}>
+                <Text style={styles.webLinkText}>Ver en la web</Text>
+              </Pressable>
+            ) : null}
           </>
         )}
       </View>
@@ -278,14 +325,18 @@ const styles = StyleSheet.create({
     bottom: 0,
     left: 0,
     right: 0,
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: spacing.md,
+    flexDirection: 'column',
+    alignItems: 'stretch',
+    gap: spacing.sm,
     padding: spacing.lg,
     backgroundColor: colors.white,
     borderTopWidth: 1,
     borderTopColor: colors.border,
   },
+  actionRow: { flexDirection: 'row', alignItems: 'center', gap: spacing.md },
+  webLink: { alignSelf: 'center', paddingVertical: 2 },
+  webLinkText: { fontSize: 14, fontWeight: '600', color: colors.primary, textDecorationLine: 'underline' },
+  qtyBtnOff: { color: colors.border },
   qty: {
     flexDirection: 'row',
     alignItems: 'center',

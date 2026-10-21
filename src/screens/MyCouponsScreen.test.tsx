@@ -7,6 +7,10 @@ import { useToast } from '../store/toastStore';
 import { useAuth } from '../store/authStore';
 import * as couponsApi from '../api/coupons';
 
+// Estos tests cubren flujos de compra/cuenta que el modo sin compra desactiva por defecto:
+// se fija el flag encendido para seguir probándolos (ver src/config/features.ts).
+jest.mock('../config/features', () => ({ PURCHASE_ENABLED: true }));
+
 // MyCouponsScreen está protegida por A5 (useRequireAuth), que llama a
 // useNavigation() — sin NavigationContainer real en este test, se reemplaza
 // por un `replace` espiable (no se prueba la redirección acá, solo que no

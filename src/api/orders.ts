@@ -1,7 +1,7 @@
-import Constants from 'expo-constants';
 import { bffClient } from './client';
 import type { Order } from '../types';
 import { decodeHtmlEntities } from '../utils/format';
+import { assertPurchaseEnabled } from './guard';
 
 export interface CreateOrderPayload {
   items: { id: number; qty: number }[];
@@ -49,28 +49,21 @@ export interface CreateOrderResult {
   shipping_total?: number;
 }
 
-const ORDERS_ENABLED = Constants.expoConfig?.extra?.ordersEnabled === true;
-
 /**
- * Crea el pedido real en WooCommerce. Mientras `ordersEnabled` (EXPO_PUBLIC_ORDERS_ENABLED)
- * esté en false, NO llama a POST /order de verdad: devuelve un resultado simulado, para
- * poder probar el flujo completo de checkout sin crear pedidos reales en producción.
- * El total se deja sin definir a propósito — quien llama (CheckoutScreen) ya calculó el
- * total real con los datos locales del carrito y lo usa como fallback (`res.total ?? finalTotal`).
+ * Crea el pedido real en WooCommerce. Con el modo sin compra activo (flag
+ * PURCHASE_ENABLED apagado, el estado por defecto) se niega a enviar nada, antes
+ * de cualquier otra cosa. El antiguo ORDERS_ENABLED (que simulaba pedidos con un
+ * `PREVIEW-…`) ya no se lee: su rama de vista previa quedó sin efecto.
  */
 export async function createOrder(payload: CreateOrderPayload): Promise<CreateOrderResult> {
-  if (!ORDERS_ENABLED) {
-    return {
-      ok: true,
-      number: `PREVIEW-${Date.now().toString().slice(-6)}`,
-    };
-  }
+  assertPurchaseEnabled();
   const res = await bffClient.post<CreateOrderResult>('/order', payload);
   return res.data;
 }
 
 /** Pedidos del usuario autenticado (token vía interceptor). */
 export async function fetchMyOrders(): Promise<Order[]> {
+  assertPurchaseEnabled();
   const res = await bffClient.get<{ ok: boolean; orders: Order[] }>('/orders');
   const orders = res.data?.orders ?? [];
   return orders.map((o) => ({

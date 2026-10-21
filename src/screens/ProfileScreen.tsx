@@ -1,5 +1,5 @@
 import React from 'react';
-import { View, Text, StyleSheet, ScrollView, Pressable } from 'react-native';
+import { View, Text, StyleSheet, ScrollView, Pressable, Linking } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import type { BottomTabScreenProps } from '@react-navigation/bottom-tabs';
 import type { CompositeScreenProps } from '@react-navigation/native';
@@ -11,6 +11,8 @@ import { useFavorites } from '../store/favoritesStore';
 import { useAuth } from '../store/authStore';
 import { openWhatsApp } from '../utils/whatsapp';
 import { attentionStatus } from '../utils/attention';
+import { PURCHASE_ENABLED, CREATORS_ENABLED, COUPONS_ENABLED } from '../config/features';
+import { PRIVACY_URL } from '../constants/privacy';
 import { colors, spacing, radius } from '../theme';
 
 const extra = (Constants.expoConfig?.extra ?? {}) as { horarioAtencion?: string };
@@ -21,102 +23,130 @@ type Props = CompositeScreenProps<
   NativeStackScreenProps<RootStackParamList>
 >;
 
-/** Mi Cuenta — completa (Fase 5): favoritos, pedidos, direcciones, puntos, creadores y ayuda. */
+/**
+ * Perfil. Sin compra (por defecto): solo favoritos, ayuda por WhatsApp y política de privacidad.
+ * Con PURCHASE_ENABLED: la "Mi cuenta" completa (favoritos, pedidos, direcciones, puntos, creadores).
+ */
 export function ProfileScreen({ navigation }: Props) {
   const favCount = useFavorites((s) => s.items.length);
   const user = useAuth((s) => s.user);
   const logout = useAuth((s) => s.logout);
   const atencion = attentionStatus();
+  const privacyUrl = PRIVACY_URL;
+  // Sin compra: "Mis cupones" va junto a "Apoya a tu creador", sin cuenta ni sesión (solo GET /mis-cupones).
+  // Con compra sigue donde estaba, en el bloque Cuenta.
+  const showCouponsRow = !PURCHASE_ENABLED && COUPONS_ENABLED;
 
   return (
     <ScrollView style={styles.container} contentContainerStyle={{ padding: spacing.lg }}>
-      {user ? (
-        <View style={styles.card}>
-          <View style={styles.headerRow}>
-            <Ionicons name="person-circle" size={40} color={colors.primary} />
-            <View>
-              <Text style={styles.title}>Hola, {user.nombre || 'cliente'} 👋</Text>
-              <Text style={styles.headerSub}>{user.email}</Text>
+      {PURCHASE_ENABLED ? (
+        <>
+        {user ? (
+          <View style={styles.card}>
+            <View style={styles.headerRow}>
+              <Ionicons name="person-circle" size={40} color={colors.primary} />
+              <View>
+                <Text style={styles.title}>Hola, {user.nombre || 'cliente'} 👋</Text>
+                <Text style={styles.headerSub}>{user.email}</Text>
+              </View>
             </View>
+            <Pressable style={styles.logoutBtn} onPress={() => logout()}>
+              <Ionicons name="log-out-outline" size={18} color={colors.error} />
+              <Text style={styles.logoutText}>Cerrar sesión</Text>
+            </Pressable>
           </View>
-          <Pressable style={styles.logoutBtn} onPress={() => logout()}>
-            <Ionicons name="log-out-outline" size={18} color={colors.error} />
-            <Text style={styles.logoutText}>Cerrar sesión</Text>
-          </Pressable>
-        </View>
-      ) : (
-        <View style={styles.card}>
-          <Ionicons name="person-circle" size={64} color={colors.primary} />
-          <Text style={styles.title}>Inicia sesión</Text>
-          <Text style={styles.sub}>Accede a tus pedidos, puntos y cupones.</Text>
-          <Pressable style={styles.btn} onPress={() => navigation.navigate('Login')}>
-            <Text style={styles.btnText}>Iniciar sesión / Registrarse</Text>
-          </Pressable>
-        </View>
-      )}
+        ) : (
+          <View style={styles.card}>
+            <Ionicons name="person-circle" size={64} color={colors.primary} />
+            <Text style={styles.title}>Inicia sesión</Text>
+            <Text style={styles.sub}>Accede a tus pedidos, puntos y cupones.</Text>
+            <Pressable style={styles.btn} onPress={() => navigation.navigate('Login')}>
+              <Text style={styles.btnText}>Iniciar sesión / Registrarse</Text>
+            </Pressable>
+          </View>
+        )}
+
+        </>
+      ) : null}
 
       {/* Disponible ahora, sin cuenta */}
       <View style={styles.menu}>
-        <Pressable style={styles.menuRow} onPress={() => navigation.navigate('Favorites')}>
+        <Pressable style={[styles.menuRow, !CREATORS_ENABLED && !showCouponsRow && styles.menuRowLast]} onPress={() => navigation.navigate('Favorites')}>
           <Ionicons name="heart-outline" size={22} color={colors.primaryDark} />
           <Text style={styles.menuLabel}>Mis favoritos</Text>
           {favCount > 0 && <Text style={styles.count}>{favCount}</Text>}
           <Ionicons name="chevron-forward" size={18} color={colors.textMuted} />
         </Pressable>
-        <Pressable style={[styles.menuRow, styles.menuRowLast]} onPress={() => navigation.navigate('Creators')}>
-          <Ionicons name="heart-circle-outline" size={22} color={colors.primaryDark} />
-          <Text style={styles.menuLabel}>Apoya a tu creador</Text>
-          <Ionicons name="chevron-forward" size={18} color={colors.textMuted} />
-        </Pressable>
-      </View>
-
-      {/* Cuenta */}
-      {user ? (
-        <View style={[styles.menu, { marginTop: spacing.lg }]}>
-          <Pressable style={styles.menuRow} onPress={() => navigation.navigate('Orders')}>
-            <Ionicons name="receipt-outline" size={22} color={colors.primaryDark} />
-            <Text style={styles.menuLabel}>Mis pedidos</Text>
+        {/* "Apoya a tu creador": disponible sin cuenta (solo GET /apoya-creador; ver CREATORS_ENABLED). */}
+        {CREATORS_ENABLED ? (
+          <Pressable style={[styles.menuRow, !showCouponsRow && styles.menuRowLast]} onPress={() => navigation.navigate('Creators')}>
+            <Ionicons name="heart-circle-outline" size={22} color={colors.primaryDark} />
+            <Text style={styles.menuLabel}>Apoya a tu creador</Text>
             <Ionicons name="chevron-forward" size={18} color={colors.textMuted} />
           </Pressable>
-          <Pressable style={styles.menuRow} onPress={() => navigation.navigate('Addresses')}>
-            <Ionicons name="location-outline" size={22} color={colors.primaryDark} />
-            <Text style={styles.menuLabel}>Mis direcciones</Text>
-            <Ionicons name="chevron-forward" size={18} color={colors.textMuted} />
-          </Pressable>
-          <Pressable style={styles.menuRow} onPress={() => navigation.navigate('Points')}>
-            <Ionicons name="star-outline" size={22} color={colors.primaryDark} />
-            <Text style={styles.menuLabel}>Mis puntos</Text>
-            <Ionicons name="chevron-forward" size={18} color={colors.textMuted} />
-          </Pressable>
+        ) : null}
+        {/* "Mis cupones" sin compra ni sesión: solo GET /mis-cupones (ver COUPONS_ENABLED). */}
+        {showCouponsRow ? (
           <Pressable style={[styles.menuRow, styles.menuRowLast]} onPress={() => navigation.navigate('MyCoupons')}>
             <Ionicons name="pricetag-outline" size={22} color={colors.primaryDark} />
             <Text style={styles.menuLabel}>Mis cupones</Text>
             <Ionicons name="chevron-forward" size={18} color={colors.textMuted} />
           </Pressable>
-        </View>
-      ) : (
+        ) : null}
+      </View>
+
+      {PURCHASE_ENABLED ? (
         <>
-          <Text style={styles.groupNote}>Al iniciar sesión podrás ver:</Text>
-          <View style={styles.menu}>
-            {[
-              { icon: 'receipt-outline' as const, label: 'Mis pedidos' },
-              { icon: 'star-outline' as const, label: 'Mis puntos' },
-              { icon: 'pricetag-outline' as const, label: 'Mis cupones' },
-              { icon: 'location-outline' as const, label: 'Mis direcciones' },
-            ].map((r) => (
-              <Pressable
-                key={r.label}
-                style={[styles.menuRow, styles.menuRowMuted]}
-                onPress={() => navigation.navigate('Login')}
-              >
-                <Ionicons name={r.icon} size={22} color={colors.textMuted} />
-                <Text style={[styles.menuLabel, { color: colors.textMuted }]}>{r.label}</Text>
-                <Ionicons name="lock-closed" size={14} color={colors.textMuted} />
-              </Pressable>
-            ))}
+        {/* Cuenta */}
+        {user ? (
+          <View style={[styles.menu, { marginTop: spacing.lg }]}>
+            <Pressable style={styles.menuRow} onPress={() => navigation.navigate('Orders')}>
+              <Ionicons name="receipt-outline" size={22} color={colors.primaryDark} />
+              <Text style={styles.menuLabel}>Mis pedidos</Text>
+              <Ionicons name="chevron-forward" size={18} color={colors.textMuted} />
+            </Pressable>
+            <Pressable style={styles.menuRow} onPress={() => navigation.navigate('Addresses')}>
+              <Ionicons name="location-outline" size={22} color={colors.primaryDark} />
+              <Text style={styles.menuLabel}>Mis direcciones</Text>
+              <Ionicons name="chevron-forward" size={18} color={colors.textMuted} />
+            </Pressable>
+            <Pressable style={styles.menuRow} onPress={() => navigation.navigate('Points')}>
+              <Ionicons name="star-outline" size={22} color={colors.primaryDark} />
+              <Text style={styles.menuLabel}>Mis puntos</Text>
+              <Ionicons name="chevron-forward" size={18} color={colors.textMuted} />
+            </Pressable>
+            <Pressable style={[styles.menuRow, styles.menuRowLast]} onPress={() => navigation.navigate('MyCoupons')}>
+              <Ionicons name="pricetag-outline" size={22} color={colors.primaryDark} />
+              <Text style={styles.menuLabel}>Mis cupones</Text>
+              <Ionicons name="chevron-forward" size={18} color={colors.textMuted} />
+            </Pressable>
           </View>
+        ) : (
+          <>
+            <Text style={styles.groupNote}>Al iniciar sesión podrás ver:</Text>
+            <View style={styles.menu}>
+              {[
+                { icon: 'receipt-outline' as const, label: 'Mis pedidos' },
+                { icon: 'star-outline' as const, label: 'Mis puntos' },
+                { icon: 'pricetag-outline' as const, label: 'Mis cupones' },
+                { icon: 'location-outline' as const, label: 'Mis direcciones' },
+              ].map((r) => (
+                <Pressable
+                  key={r.label}
+                  style={[styles.menuRow, styles.menuRowMuted]}
+                  onPress={() => navigation.navigate('Login')}
+                >
+                  <Ionicons name={r.icon} size={22} color={colors.textMuted} />
+                  <Text style={[styles.menuLabel, { color: colors.textMuted }]}>{r.label}</Text>
+                  <Ionicons name="lock-closed" size={14} color={colors.textMuted} />
+                </Pressable>
+              ))}
+            </View>
+          </>
+        )}
+
         </>
-      )}
+      ) : null}
 
       <View style={styles.help}>
         <Text style={styles.helpTitle}>¿Necesitas ayuda?</Text>
@@ -130,6 +160,18 @@ export function ProfileScreen({ navigation }: Props) {
         </Pressable>
         <Text style={styles.helpText}>Atención: Lun a Vie, {HORARIO_ATENCION}</Text>
       </View>
+
+      {privacyUrl ? (
+        <Pressable
+          style={styles.privacy}
+          onPress={() => Linking.openURL(privacyUrl).catch(() => {})}
+          accessibilityRole="link"
+          accessibilityLabel="Política de privacidad"
+        >
+          <Ionicons name="shield-checkmark-outline" size={18} color={colors.primaryDark} />
+          <Text style={styles.privacyText}>Política de privacidad</Text>
+        </Pressable>
+      ) : null}
     </ScrollView>
   );
 }
@@ -160,4 +202,6 @@ const styles = StyleSheet.create({
   waBtn: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8, backgroundColor: colors.success, borderRadius: radius.pill, paddingHorizontal: spacing.xl, minHeight: 48, alignSelf: 'stretch', marginTop: 4 },
   waBtnText: { color: colors.white, fontWeight: '700', fontSize: 15 },
   helpText: { fontSize: 13, color: colors.textMuted },
+  privacy: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6, marginTop: spacing.xl, paddingVertical: spacing.sm },
+  privacyText: { fontSize: 14, fontWeight: '600', color: colors.primaryDark, textDecorationLine: 'underline' },
 });

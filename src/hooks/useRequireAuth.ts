@@ -3,6 +3,7 @@ import { useNavigation } from '@react-navigation/native';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { useAuth } from '../store/authStore';
 import type { RootStackParamList } from '../navigation/types';
+import { PURCHASE_ENABLED } from '../config/features';
 
 /**
  * Redirige a Login si no hay sesión — para las pantallas que exigen cuenta
@@ -28,10 +29,11 @@ export function useRequireAuth(): boolean {
   const user = useAuth((s) => s.user);
 
   useEffect(() => {
-    if (tokenReady && !user) {
+    // Modo sin compra: ninguna pantalla pide sesión, no se redirige a Login.
+    if (PURCHASE_ENABLED && tokenReady && !user) {
       navigation.replace('Login');
     }
   }, [tokenReady, user, navigation]);
 
-  return tokenReady && !!user;
+  return PURCHASE_ENABLED && tokenReady && !!user;
 }

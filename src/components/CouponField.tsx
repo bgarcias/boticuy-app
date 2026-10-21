@@ -5,9 +5,20 @@ import { useCart } from '../store/cartStore';
 import { useToast } from '../store/toastStore';
 import { validateCoupon } from '../api/coupons';
 import { formatSoles } from '../utils/format';
+import { normalizeCouponCode, WEB_COUPON_MAX_LENGTH } from '../utils/webCart';
+import { PURCHASE_ENABLED } from '../config/features';
 import { colors, radius, spacing } from '../theme';
 
-/** Campo para ingresar/quitar un cupón de descuento. */
+/**
+ * Campo para ingresar/quitar un cupón de descuento.
+ *
+ * Dos variantes, elegidas por el flag PURCHASE_ENABLED (ver config/features.ts):
+ *  - Con PURCHASE_ENABLED: la original. Valida contra el servidor (GET /coupon), revisa el monto
+ *    mínimo y muestra el descuento calculado en el app.
+ *  - Sin él (carrito que termina en la web): NO llama a ningún servicio ni calcula descuento.
+ *    Valida solo el formato y guarda el código con un descuento neutro (tipo 'web', monto 0,
+ *    mínimo 0, así `discount()` da 0); el código viaja a la web en el enlace de "Continuar en la web".
+ */
 export function CouponField() {
   const coupon = useCart((s) => s.coupon);
   const setCoupon = useCart((s) => s.setCoupon);
@@ -23,6 +34,19 @@ export function CouponField() {
   const apply = async (raw?: string) => {
     const value = (raw ?? code).trim();
     if (!value) return;
+    if (!PURCHASE_ENABLED) {
+      // Variante web: solo formato, sin servidor ni descuento.
+      const check = normalizeCouponCode(value);
+      if (!check.ok) {
+        setError(`Revisa el código: usa solo letras, números, guion (-) y guion bajo (_), hasta ${WEB_COUPON_MAX_LENGTH} caracteres.`);
+        return;
+      }
+      setError(null);
+      setCoupon({ code: check.code, discount_type: 'web', amount: 0, minimum_amount: 0 });
+      setCode('');
+      showToast('Cupón guardado');
+      return;
+    }
     setLoading(true);
     setError(null);
     try {
@@ -45,6 +69,24 @@ export function CouponField() {
       setLoading(false);
     }
   };
+
+  if (coupon && !PURCHASE_ENABLED) {
+    // Variante web: recuadro verde con el código; sin cifras ni variante ámbar. El texto ocupa solo el espacio
+    // libre a la izquierda (se parte en varias líneas si hace falta) y "Quitar" queda fijo a la derecha.
+    return (
+      <View style={styles.appliedWrap}>
+        <View style={styles.applied}>
+          <Ionicons name="pricetag" size={16} color={colors.success} />
+          <Text style={[styles.appliedText, styles.appliedTextWrap]}>
+            Cupón <Text style={{ fontWeight: '800' }}>{coupon.code}</Text> · {coupon.percent != null ? `${coupon.percent}% de descuento · ` : ''}Se aplicará en la web
+          </Text>
+        </View>
+        <Pressable onPress={() => setCoupon(null)} hitSlop={8} style={styles.removeWeb}>
+          <Text style={styles.remove}>Quitar</Text>
+        </Pressable>
+      </View>
+    );
+  }
 
   if (coupon) {
     const belowMinimum = !!coupon.minimum_amount && subtotal < coupon.minimum_amount;
@@ -92,6 +134,7 @@ export function CouponField() {
           onChangeText={(t) => setCode(t.toUpperCase())}
           autoCapitalize="characters"
           autoCorrect={false}
+          maxLength={PURCHASE_ENABLED ? undefined : WEB_COUPON_MAX_LENGTH}
           returnKeyType="done"
           onSubmitEditing={() => apply()}
         />
@@ -125,4 +168,7 @@ const styles = StyleSheet.create({
   applied: { flexDirection: 'row', alignItems: 'center', gap: 8, flex: 1 },
   appliedText: { color: colors.text, fontSize: 14 },
   remove: { color: colors.error, fontWeight: '700', fontSize: 13 },
+  // Variante web: el texto se encoge y se parte en líneas; el botón nunca se encoge ni se tapa.
+  appliedTextWrap: { flex: 1, flexShrink: 1 },
+  removeWeb: { flexShrink: 0, marginLeft: spacing.md, alignSelf: 'center' },
 });

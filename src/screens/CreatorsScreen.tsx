@@ -11,11 +11,23 @@ import { useToast } from '../store/toastStore';
 import { analytics } from '../analytics';
 import { Loading, ErrorView, Empty } from '../components/Feedback';
 import { formatSoles } from '../utils/format';
+import { normalizeCouponCode } from '../utils/webCart';
+import { PURCHASE_ENABLED, CART_ENABLED } from '../config/features';
 import { colors, spacing, radius, shadow } from '../theme';
 
 type Props = NativeStackScreenProps<RootStackParamList, 'Creators'>;
 
+/**
+ * "Apoya a tu creador". Dos modos, elegidos por PURCHASE_ENABLED (ver config/features.ts):
+ *  - Con PURCHASE_ENABLED: el original (creadores + "Otros cupones disponibles", "Usar" valida
+ *    contra el servidor con GET /coupon y aplica el descuento calculado en el app).
+ *  - Sin él (carrito que termina en la web): solo la sección de creadores (GET /apoya-creador).
+ *    /mis-cupones sigue cerrada: NO se llama (el código de "Otros cupones disponibles" se
+ *    conserva sin renderizarse, por si se reabre). "Usar" no valida contra el servidor ni revisa
+ *    mínimos: guarda el código en el carrito (descuento neutro, tipo 'web') para mandarlo a la web.
+ */
 export function CreatorsScreen({ navigation }: Props) {
+  const webMode = !PURCHASE_ENABLED;
   const [copa, setCopa] = useState<Creator[]>([]);
   // Cupones generales, mostrados como contenido adicional debajo de Copa
   // Boticuy — así la pantalla nunca se siente vacía y siempre hay algo que usar.
@@ -30,17 +42,34 @@ export function CreatorsScreen({ navigation }: Props) {
   const load = () => {
     setLoading(true);
     setError(null);
-    Promise.all([fetchApoyaCreador(), fetchMisCupones()])
+    Promise.all([fetchApoyaCreador(), webMode ? Promise.resolve([] as Creator[]) : fetchMisCupones()])
       .then(([c, m]) => {
         setCopa(c);
         setOtros(m);
       })
-      .catch(() => setError('No pudimos cargar los creadores.'))
+      // En modo web, un 503 (ruta cerrada en el servidor) o cualquier fallo se muestra con un mensaje amable y "Reintentar".
+      .catch(() =>
+        setError(webMode ? 'Los códigos de creadores no están disponibles por ahora. Inténtalo más tarde.' : 'No pudimos cargar los creadores.')
+      )
       .finally(() => setLoading(false));
   };
   useEffect(load, []);
 
   const use = async (c: Creator) => {
+    if (webMode) {
+      const check = normalizeCouponCode(c.code);
+      if (!check.ok) {
+        showToast('Este código no se puede usar desde el app.', { variant: 'warning' });
+        return;
+      }
+      // Porcentaje informativo del listado (sin monto en soles); la web valida el código y aplica el descuento real.
+      const percent = typeof c.amount === 'number' && Number.isFinite(c.amount) && c.amount > 0 ? c.amount : undefined;
+      setCoupon({ code: check.code, discount_type: 'web', amount: 0, minimum_amount: 0, ...(percent !== undefined ? { percent } : {}) });
+      analytics.track('apply_creator_coupon', { code: check.code });
+      showToast(`Cupón ${check.code} guardado`);
+      navigation.navigate('Tabs', { screen: CART_ENABLED ? 'Carrito' : 'Catalogo' });
+      return;
+    }
     // Solo se llega acá desde el botón "Usar", que solo se muestra si c.active
     // y por lo tanto c.amount ya es un número real (ver Card) — este guard es
     // solo para que el tipo quede correcto, no debería dispararse en la práctica.
@@ -80,7 +109,12 @@ export function CreatorsScreen({ navigation }: Props) {
         {!!c.name && c.name.toLowerCase() !== c.code.toLowerCase() && <Text style={styles.name}>{c.name}</Text>}
         <Text style={styles.code}>{c.code}</Text>
         {!!c.channel && <Text style={styles.channel}>{c.channel}</Text>}
-        {c.amount != null && <Text style={styles.off}>{c.amount}% de descuento</Text>}
+        {/* Con el monto que devuelve el servidor: "N% de descuento" (igual que con compra). Solo en modo web y sin monto: "Condiciones en la web". */}
+        {webMode && c.amount == null ? (
+          <Text style={styles.channel}>Condiciones en la web</Text>
+        ) : (
+          c.amount != null && <Text style={styles.off}>{c.amount}% de descuento</Text>
+        )}
       </View>
       <Pressable style={styles.useBtn} onPress={() => use(c)}>
         <Ionicons name="pricetag" size={16} color={colors.white} />
@@ -94,7 +128,9 @@ export function CreatorsScreen({ navigation }: Props) {
       <View style={styles.intro}>
         <Text style={styles.introTitle}>Apoya a tu creador favorito 💜</Text>
         <Text style={styles.introText}>
-          Usa el código de tu creador y obtén descuento en tu compra. Tú ahorras y ellos suman.
+          {webMode
+            ? 'Usa el código de tu creador favorito. La web valida el código y aplica el descuento según sus condiciones.'
+            : 'Usa el código de tu creador y obtén descuento en tu compra. Tú ahorras y ellos suman.'}
         </Text>
       </View>
 

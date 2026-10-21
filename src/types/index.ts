@@ -114,6 +114,12 @@ export interface AppliedCoupon {
   discount_type: string; // 'percent' | 'fixed_cart'
   amount: number;
   minimum_amount: number;
+  /**
+   * Solo en modo sin compra (tipo 'web'): porcentaje INFORMATIVO que traía el listado al tocar "Usar".
+   * No se usa para calcular nada (`amount` sigue en 0 y `discount()` en 0); la web valida y aplica el descuento.
+   * Ausente si el código se escribió a mano.
+   */
+  percent?: number;
 }
 
 /** Datos del formulario de checkout (invitado) */

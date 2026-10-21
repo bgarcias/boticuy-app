@@ -10,9 +10,40 @@ const apiUrl = new URL(bffUrl);
 // la URL de API del entorno activo es http:// (staging sin dominio/SSL propio
 // todavía). En producción (https) este plugin ni se incluye en el build.
 const needsCleartext = apiUrl.protocol === 'http:';
-// Mientras esté en false, createOrder() no llama a POST /order de verdad
-// (ver src/api/orders.ts) — evita crear pedidos reales durante el desarrollo.
-const ordersEnabled = process.env.EXPO_PUBLIC_ORDERS_ENABLED === 'true';
+// Modo sin compra (ver FASE1_SIN_COMPRA.md): APAGADO por defecto. Solo el valor
+// exacto 'true' enciende el carrito, el checkout, la cuenta y las rutas de
+// pedidos/pagos del app (ver src/config/features.ts). Reemplaza al antiguo
+// EXPO_PUBLIC_ORDERS_ENABLED, que simulaba pedidos en vez de desactivarlos.
+const purchaseEnabled = process.env.EXPO_PUBLIC_PURCHASE_ENABLED === 'true';
+
+// Carrito del app que termina en la web (ver src/screens/WebCartScreen.tsx):
+// ENCENDIDO por defecto; EXPO_PUBLIC_CART_ENABLED=false lo apaga. No reabre nada
+// de lo que cierra el modo sin compra (checkout, pagos, cuenta, cupones, puntos).
+const cartEnabled = process.env.EXPO_PUBLIC_CART_ENABLED !== 'false';
+
+// Pantalla "Apoya a tu creador" (src/screens/CreatorsScreen.tsx): ENCENDIDA por defecto;
+// EXPO_PUBLIC_CREATORS_ENABLED=false la apaga. Solo usa GET /apoya-creador, que el plugin
+// deja abierta por defecto (BOTICUY_APP_CREATORS_ENABLED=false en wp-config.php la cierra).
+const creatorsEnabled = process.env.EXPO_PUBLIC_CREATORS_ENABLED !== 'false';
+
+// Pantalla "Mis cupones" sin cuenta (src/screens/MyCouponsScreen.tsx): ENCENDIDA por defecto;
+// EXPO_PUBLIC_COUPONS_ENABLED=false la apaga. Solo usa GET /mis-cupones, que el plugin
+// deja abierta por defecto (BOTICUY_APP_COUPONS_ENABLED=false en wp-config.php la cierra).
+const couponsEnabled = process.env.EXPO_PUBLIC_COUPONS_ENABLED !== 'false';
+
+// EAS expone el perfil de build durante el build (no existe en `expo start`).
+const isProductionBuild = process.env.EAS_BUILD_PROFILE === 'production';
+
+// Chat con IA del Home (ver src/api/chat.ts). La URL del chat y la de
+// valoración van en variables propias, con producción por defecto.
+const chatUrl = process.env.EXPO_PUBLIC_CHAT_URL || 'https://boticuy.com/wp-admin/admin-ajax.php';
+const chatRateUrl = process.env.EXPO_PUBLIC_CHAT_RATE_URL || 'https://boticuy.com/wp-json/botichat/v1/rate';
+// La clave del chat SOLO se carga en el perfil production: ni preview ni
+// desarrollo la leen, para que las pruebas no cuenten como tráfico real del app.
+// Todo lo EXPO_PUBLIC_* queda dentro del app: la clave identifica el tráfico
+// del app, no lo protege.
+const chatAppKey = isProductionBuild ? process.env.EXPO_PUBLIC_CHAT_APP_KEY || '' : '';
+const privacyPolicyUrl = process.env.EXPO_PUBLIC_PRIVACY_URL || 'https://boticuy.com/politicas-de-privacidad/';
 
 /**
  * Salvaguarda de build (ver C3 en boticuy-hallazgos-completo.md): antes de
@@ -28,16 +59,24 @@ function assertProductionConfigIsSafe() {
 
   const problems = [];
 
-  if (!ordersEnabled && process.env.ORDERS_DISABLED_CONFIRMED !== 'true') {
+  // El app de producción nace sin compra. Encenderla exige confirmarlo.
+  if (purchaseEnabled && process.env.PURCHASE_ENABLED_CONFIRMED !== 'true') {
     problems.push(
-      'EXPO_PUBLIC_ORDERS_ENABLED no es "true" (y ORDERS_DISABLED_CONFIRMED tampoco está puesto para confirmar que es intencional) — createOrder() simularía pedidos sin cobrar ni registrar nada real (ver C3 en boticuy-hallazgos-completo.md).'
+      'EXPO_PUBLIC_PURCHASE_ENABLED es "true" (y PURCHASE_ENABLED_CONFIRMED no está puesto para confirmar que es intencional) — el app ofrecería carrito, checkout y cuenta (ver FASE1_SIN_COMPRA.md).'
     );
+  }
+
+  // Sin la clave el chat responde, pero el servidor lo cuenta como tráfico web de prueba.
+  if (!chatAppKey) {
+    problems.push('EXPO_PUBLIC_CHAT_APP_KEY está vacía — un build de producción debe llevar la clave del chat (definirla como variable de EAS del perfil production).');
   }
 
   const productionUrls = {
     EXPO_PUBLIC_STORE_API_URL: storeApiUrl,
     EXPO_PUBLIC_WP_API_URL: wpApiUrl,
     EXPO_PUBLIC_BFF_URL: bffUrl,
+    EXPO_PUBLIC_CHAT_URL: chatUrl,
+    EXPO_PUBLIC_CHAT_RATE_URL: chatRateUrl,
   };
   for (const [name, value] of Object.entries(productionUrls)) {
     let isProductionUrl = false;
@@ -57,7 +96,7 @@ function assertProductionConfigIsSafe() {
       'Build de producción bloqueado — configuración insegura en eas.json (perfil "production"):\n' +
       problems.map((p) => `  - ${p}`).join('\n') +
       '\n\nRevisa el bloque "env" del perfil "production" en eas.json.' +
-      '\nSi es un soft-launch intencional con pedidos desactivados, define ORDERS_DISABLED_CONFIRMED=true al construir para confirmarlo explícitamente (las URLs igual deben ser de producción).'
+      '\nPara encender la compra de forma intencional, define PURCHASE_ENABLED_CONFIRMED=true al construir (las URLs igual deben ser de producción).'
     );
   }
 }
@@ -101,7 +140,15 @@ module.exports = {
       storeApiUrl,
       wpApiUrl,
       bffUrl,
-      ordersEnabled,
+      purchaseEnabled,
+      cartEnabled,
+      creatorsEnabled,
+      couponsEnabled,
+      isProductionBuild,
+      chatUrl,
+      chatRateUrl,
+      chatAppKey,
+      privacyPolicyUrl,
       // Analítica (PostHog). Sin key propia hardcodeada (ver B11 en
       // boticuy-hallazgos-completo.md) — se lee de eas.json/.env.staging, mismo
       // patrón que las URLs de API. Sin la variable seteada, initAnalytics()

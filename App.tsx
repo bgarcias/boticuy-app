@@ -9,14 +9,17 @@ import { OfflineBanner } from './src/components/OfflineBanner';
 import { useAuth } from './src/store/authStore';
 import { useShippingConfig } from './src/store/shippingConfigStore';
 import { initAnalytics } from './src/analytics/posthog';
+import { PURCHASE_ENABLED } from './src/config/features';
 
 export default function App() {
   useEffect(() => {
+    // Con el modo sin compra apagado, hydrate() no llama a /auth/refresh y
+    // refresh() no llama a /shipping/config: las dos rutas están cerradas.
     useAuth.getState().hydrate();
     initAnalytics();
     // Umbral Plata/Oro (ver M5): se refresca en segundo plano, sin bloquear el
     // primer render — mientras tanto se usa el valor cacheado o el default de build.
-    useShippingConfig.getState().refresh();
+    if (PURCHASE_ENABLED) useShippingConfig.getState().refresh();
   }, []);
 
   return (

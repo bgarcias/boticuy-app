@@ -4,6 +4,7 @@ import type { AuthUser } from '../types';
 import { setAuthToken } from '../api/authToken';
 import { refreshSession, logoutSession } from '../api/auth';
 import { analytics } from '../analytics';
+import { PURCHASE_ENABLED } from '../config/features';
 
 const KEY = 'boticuy-auth';
 
@@ -33,6 +34,12 @@ export const useAuth = create<AuthState>((set) => ({
   hydrated: false,
 
   hydrate: async () => {
+    // Modo sin compra: no hay cuenta. No se lee ninguna sesión guardada (así el
+    // Bearer tampoco viaja al catálogo) ni se llama a /auth/refresh.
+    if (!PURCHASE_ENABLED) {
+      set({ tokenReady: true, hydrated: true });
+      return;
+    }
     let hadToken = false;
     try {
       const raw = await SecureStore.getItemAsync(KEY);
@@ -84,7 +91,8 @@ export const useAuth = create<AuthState>((set) => ({
   setAuth: async (token, user) => {
     setAuthToken(token);
     set({ token, user });
-    analytics.identify(String(user.id), { email: user.email });
+    // Sin cuenta no hay identify en analítica (modo sin compra).
+    if (PURCHASE_ENABLED) analytics.identify(String(user.id), { email: user.email });
     try {
       await SecureStore.setItemAsync(KEY, JSON.stringify({ token, user }));
     } catch {

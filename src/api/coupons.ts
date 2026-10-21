@@ -1,9 +1,11 @@
 import { bffClient } from './client';
 import type { Coupon, AppliedCoupon, Creator } from '../types';
 import { decodeHtmlEntities } from '../utils/format';
+import { assertPurchaseEnabled, assertCreatorsEnabled, assertCouponsEnabled } from './guard';
 
 /** Lista de cupones de creador activos (en vivo desde WooCommerce). */
 export async function fetchCoupons(): Promise<Coupon[]> {
+  assertPurchaseEnabled();
   const res = await bffClient.get<Coupon[]>('/coupons');
   return res.data.map((c) => ({ ...c, descripcion: c.descripcion ? decodeHtmlEntities(c.descripcion) : c.descripcion }));
 }
@@ -13,20 +15,31 @@ interface CuponesResponse {
   cupones: Creator[];
 }
 
-/** "Apoya a tu creador": solo cupones marcados como Copa Boticuy. */
+/**
+ * "Apoya a tu creador": solo cupones marcados como Copa Boticuy. Es la única función de este
+ * archivo que no depende de PURCHASE_ENABLED: usa CREATORS_ENABLED (el plugin mantiene la ruta
+ * abierta por defecto; solo se cierra con BOTICUY_APP_CREATORS_ENABLED=false en wp-config.php).
+ */
 export async function fetchApoyaCreador(): Promise<Creator[]> {
+  assertCreatorsEnabled();
   const res = await bffClient.get<CuponesResponse>('/apoya-creador');
   return res.data.cupones ?? [];
 }
 
-/** "Mis cupones" (disponibles): cupones normales, sin marca de Copa ni de Oro. */
+/**
+ * "Mis cupones" (disponibles): cupones normales, sin marca de Copa ni de Oro. No depende de
+ * PURCHASE_ENABLED: usa COUPONS_ENABLED (el plugin deja la ruta abierta por defecto; solo se cierra
+ * con BOTICUY_APP_COUPONS_ENABLED=false en wp-config.php). Sin sesión: la ruta no lee ningún usuario.
+ */
 export async function fetchMisCupones(): Promise<Creator[]> {
+  assertCouponsEnabled();
   const res = await bffClient.get<CuponesResponse>('/mis-cupones');
   return res.data.cupones ?? [];
 }
 
 /** "Mis cupones" (exclusivos Oro): con gate de acceso resuelto en el servidor. */
 export async function fetchCuponesOro(): Promise<Creator[]> {
+  assertPurchaseEnabled();
   const res = await bffClient.get<CuponesResponse>('/cupones-oro');
   return res.data.cupones ?? [];
 }
@@ -51,6 +64,7 @@ export interface CouponCartItem {
  * existencia/vencimiento/Oro/límite de usos.
  */
 export async function validateCoupon(code: string, items?: CouponCartItem[]): Promise<ValidateResult> {
+  assertPurchaseEnabled();
   const params: Record<string, string> = { code: code.trim() };
   if (items && items.length > 0) {
     params.items = JSON.stringify(items);
